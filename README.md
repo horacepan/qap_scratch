@@ -1,1 +1,1 @@
-# qap_scratch
+Messing around with the QAP
