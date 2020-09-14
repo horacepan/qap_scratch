@@ -50,6 +50,14 @@ def qap_ft(mat, _lambda):
 
     return fhat
 
+def qap_fhat(amat, bmat, shape):
+    n = sum(shape)
+    ahat = qap_ft(amat, shape)
+    bhat = qap_ft(bmat, shape)
+
+    fhat = (1 / math.factorial(n - 2)) * (ahat @ bhat.T)
+    return fhat
+
 def gen_qap_func(a, b):
     def f(p):
         pmat = p.mat()
