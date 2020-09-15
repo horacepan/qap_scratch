@@ -9,6 +9,27 @@ import matplotlib.pyplot as plt
 
 PREFIX = '../data/datasets1/'
 
+def psd_project(mat):
+    S, U = np.linalg.eig(mat)
+    pos_idx = S > 0
+    return (U[:, pos_idx] * S[pos_idx]) @ U[:, pos_idx].T
+
+def make_y0(n):
+    n2 = n * n
+    yhat = np.zeros((n2 + 1, n2 + 1))
+    nI_e = n * np.eye(n) - 1
+
+    yhat[0, 0] = 1
+    yhat[0, 1:] = 1
+    yhat[1:, 0] = 1
+    yhat[1:, 1:] = (1 / n2) + ((1 / (n2 * (n - 1))) * np.kron(nI_e, nI_e))
+    return yhat
+
+def make_r0(n, Vhat, Yhat):
+    R0 = Vhat.T @ Yhat @ Vhat
+    R0 = (R0 + R0.T) / 2.
+    return R0
+
 def make_vhat(V):
     n = V.shape[0]
     vxv = np.kron(V, V)
@@ -39,41 +60,48 @@ def admm_qap(L, Vhat, J, args):
     st = time.time()
     maxit = args.maxit
     tol = args.tol
-    beta = args.beta
     gamma = args.gamma
     low_rank = args.low_rank
     K = args.K
+
 
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
     L = L / (normL * Vhat_nrows)
     n = int((L.shape[0] - 1) ** 0.5)
-    r_shape = None
+    beta = n / 3.
+
     Y = np.random.random((Vhat.shape[0], Vhat.shape[0]))
-    Yhat = np.random.random((Vhat.shape[0], Vhat.shape[0]))
-    R = Vhat.T @ Yhat @ Vhat
-    Z = Y - (Vhat @ R @  Vhat.T)
+    Yhat = make_y0(n)
+    R0 = make_r0(n, Vhat, Yhat)
+    Z0 = Y0 - Vhat @ R0 @ Vhat.T
+
+    Y = Y0
+    R = R0
+    Z = Z0
 
     for i in tqdm(range(maxit)):
         R_pre_proj = Vhat.T @ (Y + Z / beta) @ Vhat
         R_pre_proj = (R_pre_proj + R_pre_proj.T) / 2.
 
         S, U = np.linalg.eig(R_pre_proj)
-        if args.low_rank:
+        if not args.low_rank:
+            pos_idx = S > 0
+            if pos_idx.sum() > 0:
+                vhat_u = Vhat @ U[:, pos_idx] # tempid
+                VRV = (vhat_u * S[pos_idx]) @ vhat_u.T
+            else:
+                VRV = np.zeros(Y.shape)
+        else:
             if S[-1] > 0:
                 vhat_u = Vhat @ U[:, -1:]
                 VRV = S[-1] * vhat_u @ vhat_u.T
-                #R = S[-1] * U[:, -1:] @ U[:, -1:].T
             else:
-                VRV = np.zeros(U.shape)
-        else:
-            pos_idx = S > 0
-            vhat_u = Vhat @ U[:, pos_idx]
-            VRV = (vhat_u * S[pos_idx]) @ vhat_u.T
-            #R = U[:, pos_idx] @ np.diag(S[pos_idx]) @ U[:, pos_idx].T
+                VRV = np.zeros(Y.shape)
 
         # update Y
         Y = VRV - (L + Z) / beta
+        Y = (Y + Y.T) / 2.
         Y[J] = 0
         Y[0, 0] = 1
         Y = np.minimum(1, np.maximum(0, Y))
@@ -81,11 +109,16 @@ def admm_qap(L, Vhat, J, args):
         Y[J] = 0
         Y[np.abs(Y) < tol] = 0
 
+        pR = Y - VRV
+
         # update Z
         Z = Z + gamma * beta * (Y - VRV)
         Z = (Z + Z.T) / 2.
         Z[np.abs(Z) < tol] = 0
         # the computed lower bound is ...
+
+        if i % 100 == 0:
+            lbd = lower_bound(L, J, Vhat, Z, n, normL * Vhat_nrows)
 
     tt = time.time() - st
     print('Done! | Elapsed: {:.2f}min'.format(tt / 60))
@@ -98,11 +131,18 @@ def lower_bound(L, J, Vhat, Z, n, scale=1):
     kron_eri = np.kron(en.T, In)
     krons = np.concatenate([kron_ier, kron_eri])
     That = np.concatenate([-np.ones((2*n, 1)), krons], 1)
+    print('That shape', That.shape)
 
     # Get the nullspace of Vhat?
-    Q, _ = np.linalg.qr(That.T, mode='reduced')
+    Q, _ = np.linalg.qr(That.T)
+    Q = Q[:, :-1]
+    print('q shape', Q.shape)
+
     Uloc = np.concatenate([Vhat, Q], 1)
+    print('Uloc shape', Uloc.shape)
+    print('Vhat shape', Vhat.shape)
     Zloc = Uloc.T @ Z @ Uloc
+    print('Zloc shape', Zloc.shape)
     W12 = Zloc[:(n-1)*(n-1) + 1, (n-1)*(n-1):]
     W21 = Zloc[(n-1)*(n-1)+1:, :(n-1)*(n-1)+1]
     W22 = Zloc[(n-1)*(n-1)+1:, (n-1)*(n-1)+1:]
@@ -138,7 +178,6 @@ def main(args):
     V = np.concatenate([np.eye(n - 1), np.ones((1, n - 1))])
     Vhat = make_vhat(V)
     J = make_gangster(n)
-    pdb.set_trace()
     admm_qap(L, Vhat, J, args)
 
 if __name__ == '__main__':
@@ -148,7 +187,6 @@ if __name__ == '__main__':
     parser.add_argument('--tol', type=float, default=1e-5)
     parser.add_argument('--low_rank', action='store_true', default=False)
     parser.add_argument('--K', type=int, default=1)
-    parser.add_argument('--beta', type=float, default=10)
     parser.add_argument('--gamma', type=float, default=1.618)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
