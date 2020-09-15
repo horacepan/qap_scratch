@@ -20,8 +20,8 @@ def make_y0(n):
     nI_e = n * np.eye(n) - 1
 
     yhat[0, 0] = 1
-    yhat[0, 1:] = 1
-    yhat[1:, 0] = 1
+    yhat[0, 1:] = 1 / n
+    yhat[1:, 0] = 1 / n
     yhat[1:, 1:] = (1 / n2) + ((1 / (n2 * (n - 1))) * np.kron(nI_e, nI_e))
     return yhat
 
@@ -39,6 +39,15 @@ def make_vhat(V):
     r2 = np.concatenate([np.ones((n * n, 1)) * (np.sqrt(2) / n), vxv], axis=1)
     Vhat = np.concatenate([r1, r2])
     return Vhat
+
+def make_that(n):
+    In = np.eye(n)
+    en = np.ones((n, 1))
+    kron_ier = np.kron(In, en.T)
+    kron_eri = np.kron(en.T, In)
+    krons = np.concatenate([kron_ier, kron_eri])
+    That = np.concatenate([-np.ones((2*n, 1)), krons], 1)
+    return That
 
 def make_gangster(n):
     J = np.zeros((n*n + 1, n*n + 1))
@@ -67,15 +76,15 @@ def admm_qap(L, Vhat, J, args):
 
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
-    L = L / (normL * Vhat_nrows)
+    L = L / normL
     n = int((L.shape[0] - 1) ** 0.5)
     beta = n / 3.
 
-    Y = np.random.random((Vhat.shape[0], Vhat.shape[0]))
-    Yhat = make_y0(n)
-    R0 = make_r0(n, Vhat, Yhat)
-    Z0 = Y0 - Vhat @ R0 @ Vhat.T
-
+    Y0 = make_y0(n)
+    R0 = make_r0(n, Vhat, Y0)
+    Z0 = Y0 - (Vhat @ R0 @ Vhat.T)
+    print('Y0', np.linalg.norm(Y0, 'fro'))
+    print('Y, R, Z starts: ', np.linalg.norm(Y0), np.linalg.norm(R0), np.linalg.norm(Z0))
     Y = Y0
     R = R0
     Z = Z0
@@ -118,50 +127,53 @@ def admm_qap(L, Vhat, J, args):
         # the computed lower bound is ...
 
         if i % 100 == 0:
-            lbd = lower_bound(L, J, Vhat, Z, n, normL * Vhat_nrows)
+            lbd = lower_bound(L, J, Vhat, Z, n, scale=normL)
+            npr = np.linalg.norm(pR, 'fro')
+            print(f'Epoch: {i:d} | Lower bound: {lbd:.4f} | norm pR: {npr:.4f}')
 
     tt = time.time() - st
     print('Done! | Elapsed: {:.2f}min'.format(tt / 60))
-    print(lower_bound(L, J, Vhat, Z, n, scale=normL * Vhat_nrows))
 
 def lower_bound(L, J, Vhat, Z, n, scale=1):
-    In = np.eye(n)
-    en = np.ones((n, 1))
-    kron_ier = np.kron(In, en.T)
-    kron_eri = np.kron(en.T, In)
-    krons = np.concatenate([kron_ier, kron_eri])
-    That = np.concatenate([-np.ones((2*n, 1)), krons], 1)
-    print('That shape', That.shape)
+    That = make_that(n)
+    # print('That shape', That.shape)
 
-    # Get the nullspace of Vhat?
     Q, _ = np.linalg.qr(That.T)
     Q = Q[:, :-1]
-    print('q shape', Q.shape)
+    # print('Q shape', Q.shape)
 
     Uloc = np.concatenate([Vhat, Q], 1)
-    print('Uloc shape', Uloc.shape)
-    print('Vhat shape', Vhat.shape)
+    # print('Uloc shape', Uloc.shape)
+
     Zloc = Uloc.T @ Z @ Uloc
-    print('Zloc shape', Zloc.shape)
-    W12 = Zloc[:(n-1)*(n-1) + 1, (n-1)*(n-1):]
-    W21 = Zloc[(n-1)*(n-1)+1:, :(n-1)*(n-1)+1]
-    W22 = Zloc[(n-1)*(n-1)+1:, (n-1)*(n-1)+1:]
+    # print('Zloc shape', Zloc.shape)
+
+    # W12 = Zloc(1:(n-1)^2+1,(n-1)^2+2:end);
+    # W22 = Zloc((n-1)^2+2:end,(n-1)^2+2:end);
+    # W11 = Zloc(1:(n-1)^2+1,1:(n-1)^2+1);
+    # W11 = (W11+W11')/2;
     W11 = Zloc[:(n-1)*(n-1)+1, :(n-1)*(n-1)+1]
     W11 = (W11 + W11.T) / 2.
+    W12 = Zloc[:(n-1)*(n-1)+1, (n-1)*(n-1)+1:]
+    W22 = Zloc[(n-1)*(n-1)+1:, (n-1)*(n-1)+1:]
 
     # Project W11 onto negative definite matrices for Zp
     Dw, Uw = np.linalg.eig(W11)
     neg_idx = Dw < 0
-    pdb.set_trace()
     W11 = (Uw[:, neg_idx] * Dw[neg_idx]) @ Uw[:, neg_idx].T
-    Zp = Uloc @ np.block([[W11, W12], [W21, W22]]) @ Uloc.T
+
+    Zp = Uloc @ np.block([[W11, W12], [W12.T, W22]]) @ Uloc.T
     Zp = (Zp + Zp.T) / 2
 
     # dont know why we dont just use Y_out
+    # print('L shape: {} | n**2 + 1 = {}'.format(L.shape, n*n + 1))
     Yp = np.zeros(L.shape)
     Yp[L + Zp < 0] = 1
     Yp[J] = 0
     Yp[0, 0] = 1
+    print(f'Z  norm: {np.linalg.norm(Z):.4f}')
+    print(f'Zp norm: {np.linalg.norm(Zp):.4f}')
+    print(f'Yp norm: {np.linalg.norm(Yp):.4f}')
     return ((L + Zp) * Yp).sum() * scale
 
 def main(args):
