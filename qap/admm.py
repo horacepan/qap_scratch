@@ -28,7 +28,6 @@ def make_y0(n):
 def make_r0(n, Vhat, Yhat):
     R0 = Vhat.T @ Yhat @ Vhat
     R0 = (R0 + R0.T) / 2.
-    pdb.set_trace()
     return R0
 
 def make_vhat(V):
@@ -66,7 +65,17 @@ def make_gangster(n):
                 J[1+i*n: 1+(i+1)*n, 1+j*n: 1+(j+1)*n] = eye_n
     return J.astype(bool)
 
-def admm_qap(L, Vhat, J, args):
+def load_true():
+    ys = scipy.io.loadmat('yhat.mat')
+    vs = scipy.io.loadmat('vhat.mat')
+    v = scipy.io.loadmat('v.mat')
+
+    yhat = ys['Yhat'].toarray()
+    vhat = vs['Vhat'].toarray()
+    v = v['V']
+    return yhat, vhat, v
+
+def admm_qap(L, Vhat, J, args, V):
     st = time.time()
     maxit = args.maxit
     tol = args.tol
@@ -74,20 +83,17 @@ def admm_qap(L, Vhat, J, args):
     low_rank = args.low_rank
     K = args.K
 
-
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
-    L = L / normL
     n = int((L.shape[0] - 1) ** 0.5)
+    L = L * ((n * n) / normL)
     beta = n / 3.
 
     Y0 = make_y0(n)
     R0 = make_r0(n, Vhat, Y0)
     Z0 = Y0 - (Vhat @ R0 @ Vhat.T)
-    print('Y0', np.linalg.norm(Y0, 'fro'))
-    print('Vhat norm:', np.linalg.norm(Vhat, 'fro'))
-    print('Y, R, Z starts: ', np.linalg.norm(Y0), np.linalg.norm(R0), np.linalg.norm(Z0))
-    pdb.set_trace()
+    yhat_true, vhat_true, v_true = load_true()
+
     Y = Y0
     R = R0
     Z = Z0
@@ -100,7 +106,7 @@ def admm_qap(L, Vhat, J, args):
         if not args.low_rank:
             pos_idx = S > 0
             if pos_idx.sum() > 0:
-                vhat_u = Vhat @ U[:, pos_idx] # tempid
+                vhat_u = Vhat @ U[:, pos_idx]
                 VRV = (vhat_u * S[pos_idx]) @ vhat_u.T
             else:
                 VRV = np.zeros(Y.shape)
@@ -112,15 +118,12 @@ def admm_qap(L, Vhat, J, args):
                 VRV = np.zeros(Y.shape)
 
         # update Y
-        Y = VRV - (L + Z) / beta
+        Y = VRV - ((L + Z) / beta)
         Y = (Y + Y.T) / 2.
-        Y[J] = 0
-        Y[0, 0] = 1
+        Y[J] = 0; Y[0,0] = 1
         Y = np.minimum(1, np.maximum(0, Y))
-        Y[0, 0] = 1
-        Y[J] = 0
+        Y[J] = 0; Y[0,0] = 1
         Y[np.abs(Y) < tol] = 0
-
         pR = Y - VRV
 
         # update Z
@@ -129,32 +132,24 @@ def admm_qap(L, Vhat, J, args):
         Z[np.abs(Z) < tol] = 0
         # the computed lower bound is ...
 
-        if i % 100 == 0:
-            lbd = lower_bound(L, J, Vhat, Z, n, scale=normL)
+        if i % 10 == 0:
+            scale = normL / (n * n)
+            lbd = lower_bound(L, J, Vhat, Z, n, scale=scale)
+            print(f'Iter {i} | Lower bound: {lbd:.2f}')
             npr = np.linalg.norm(pR, 'fro')
-            print(f'Epoch: {i:d} | Lower bound: {lbd:.4f} | norm pR: {npr:.4f}')
 
     tt = time.time() - st
     print('Done! | Elapsed: {:.2f}min'.format(tt / 60))
 
 def lower_bound(L, J, Vhat, Z, n, scale=1):
     That = make_that(n)
-    # print('That shape', That.shape)
-
     Q, _ = np.linalg.qr(That.T)
     Q = Q[:, :-1]
-    # print('Q shape', Q.shape)
 
     Uloc = np.concatenate([Vhat, Q], 1)
-    # print('Uloc shape', Uloc.shape)
 
     Zloc = Uloc.T @ Z @ Uloc
-    # print('Zloc shape', Zloc.shape)
 
-    # W12 = Zloc(1:(n-1)^2+1,(n-1)^2+2:end);
-    # W22 = Zloc((n-1)^2+2:end,(n-1)^2+2:end);
-    # W11 = Zloc(1:(n-1)^2+1,1:(n-1)^2+1);
-    # W11 = (W11+W11')/2;
     W11 = Zloc[:(n-1)*(n-1)+1, :(n-1)*(n-1)+1]
     W11 = (W11 + W11.T) / 2.
     W12 = Zloc[:(n-1)*(n-1)+1, (n-1)*(n-1)+1:]
@@ -169,15 +164,11 @@ def lower_bound(L, J, Vhat, Z, n, scale=1):
     Zp = (Zp + Zp.T) / 2
 
     # dont know why we dont just use Y_out
-    # print('L shape: {} | n**2 + 1 = {}'.format(L.shape, n*n + 1))
     Yp = np.zeros(L.shape)
     Yp[L + Zp < 0] = 1
-    Yp[J] = 0
-    Yp[0, 0] = 1
-    print(f'Z  norm: {np.linalg.norm(Z):.4f}')
-    print(f'Zp norm: {np.linalg.norm(Zp):.4f}')
-    print(f'Yp norm: {np.linalg.norm(Yp):.4f}')
-    return ((L + Zp) * Yp).sum() * scale
+    Yp[J] = 0; Yp[0, 0] = 1
+    lbd = ((L + Zp) * Yp).sum() * scale
+    return lbd
 
 def main(args):
     np.random.seed(args.seed)
@@ -190,18 +181,17 @@ def main(args):
     Ldim = 1 + A.shape[0] * A.shape[0]
     L = np.zeros((Ldim, Ldim))
     L[1:, 1:] = np.kron(B, A)
-    V = np.concatenate([np.eye(n - 1), np.ones((1, n - 1))])
+    V = np.concatenate([np.eye(n - 1), -np.ones((1, n - 1))])
     V, _ = np.linalg.qr(V, 'reduced')
-    print('V norm: {:.4f} | shape: {}'.format(np.linalg.norm(V, 'fro'), V.shape))
     Vhat = make_vhat(V)
     J = make_gangster(n)
-    admm_qap(L, Vhat, J, args)
+    admm_qap(L, Vhat, J, args, V)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ex', type=str, default='nug12')
+    parser.add_argument('--ex', type=str, default='nug20')
     parser.add_argument('--maxit', type=int, default=1000)
-    parser.add_argument('--tol', type=float, default=1e-5)
+    parser.add_argument('--tol', type=float, default=1e-8)
     parser.add_argument('--low_rank', action='store_true', default=False)
     parser.add_argument('--K', type=int, default=1)
     parser.add_argument('--gamma', type=float, default=1.618)
