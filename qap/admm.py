@@ -4,13 +4,20 @@ import time
 import argparse
 from tqdm import tqdm
 import numpy as np
+from scipy.linalg import eig
 import scipy.io
 import matplotlib.pyplot as plt
 
 PREFIX = '../data/datasets1/'
 
+def fnorm(m):
+    return np.linalg.norm(m, 'fro')
+
+def pnorm(m, msg):
+    print(f'{msg} | Norm: {fnorm(m):.2f} | ASum: {np.abs(m).sum():.2f}')
+
 def psd_project(mat):
-    S, U = np.linalg.eig(mat)
+    S, U = np.linalg.eigh(mat)
     pos_idx = S > 0
     return (U[:, pos_idx] * S[pos_idx]) @ U[:, pos_idx].T
 
@@ -75,7 +82,7 @@ def load_true():
     v = v['V']
     return yhat, vhat, v
 
-def admm_qap(L, Vhat, J, args, V):
+def admm_qap(L, Vhat, J, args, V, n):
     st = time.time()
     maxit = args.maxit
     tol = args.tol
@@ -85,8 +92,7 @@ def admm_qap(L, Vhat, J, args, V):
 
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
-    n = int((L.shape[0] - 1) ** 0.5)
-    L = L * ((n * n) / normL)
+    L = L * (n*n / normL)
     beta = n / 3.
 
     Y0 = make_y0(n)
@@ -102,7 +108,7 @@ def admm_qap(L, Vhat, J, args, V):
         R_pre_proj = Vhat.T @ (Y + Z / beta) @ Vhat
         R_pre_proj = (R_pre_proj + R_pre_proj.T) / 2.
 
-        S, U = np.linalg.eig(R_pre_proj)
+        S, U = np.linalg.eigh(R_pre_proj)
         if not args.low_rank:
             pos_idx = S > 0
             if pos_idx.sum() > 0:
@@ -130,13 +136,12 @@ def admm_qap(L, Vhat, J, args, V):
         Z = Z + gamma * beta * (Y - VRV)
         Z = (Z + Z.T) / 2.
         Z[np.abs(Z) < tol] = 0
-        # the computed lower bound is ...
 
-        if i % 10 == 0:
+        if i % 100 == 0:
             scale = normL / (n * n)
-            lbd = lower_bound(L, J, Vhat, Z, n, scale=scale)
-            print(f'Iter {i} | Lower bound: {lbd:.2f}')
             npr = np.linalg.norm(pR, 'fro')
+            lbd = lower_bound(L, J, Vhat, Z, n, scale=scale)
+            print(f'Iter {i} | Lower bound: {lbd:.2f} | pR: {npr:.6f}')
 
     tt = time.time() - st
     print('Done! | Elapsed: {:.2f}min'.format(tt / 60))
@@ -147,7 +152,6 @@ def lower_bound(L, J, Vhat, Z, n, scale=1):
     Q = Q[:, :-1]
 
     Uloc = np.concatenate([Vhat, Q], 1)
-
     Zloc = Uloc.T @ Z @ Uloc
 
     W11 = Zloc[:(n-1)*(n-1)+1, :(n-1)*(n-1)+1]
@@ -156,14 +160,13 @@ def lower_bound(L, J, Vhat, Z, n, scale=1):
     W22 = Zloc[(n-1)*(n-1)+1:, (n-1)*(n-1)+1:]
 
     # Project W11 onto negative definite matrices for Zp
-    Dw, Uw = np.linalg.eig(W11)
+    Dw, Uw = np.linalg.eigh(W11)
     neg_idx = Dw < 0
     W11 = (Uw[:, neg_idx] * Dw[neg_idx]) @ Uw[:, neg_idx].T
 
     Zp = Uloc @ np.block([[W11, W12], [W12.T, W22]]) @ Uloc.T
     Zp = (Zp + Zp.T) / 2
 
-    # dont know why we dont just use Y_out
     Yp = np.zeros(L.shape)
     Yp[L + Zp < 0] = 1
     Yp[J] = 0; Yp[0, 0] = 1
@@ -185,13 +188,13 @@ def main(args):
     V, _ = np.linalg.qr(V, 'reduced')
     Vhat = make_vhat(V)
     J = make_gangster(n)
-    admm_qap(L, Vhat, J, args, V)
+    admm_qap(L, Vhat, J, args, V, n)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--ex', type=str, default='nug20')
     parser.add_argument('--maxit', type=int, default=1000)
-    parser.add_argument('--tol', type=float, default=1e-8)
+    parser.add_argument('--tol', type=float, default=1e-5)
     parser.add_argument('--low_rank', action='store_true', default=False)
     parser.add_argument('--K', type=int, default=1)
     parser.add_argument('--gamma', type=float, default=1.618)
