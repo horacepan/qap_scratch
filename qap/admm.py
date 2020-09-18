@@ -98,7 +98,6 @@ def admm_qap(L, Vhat, J, args, V, n):
     Y0 = make_y0(n)
     R0 = make_r0(n, Vhat, Y0)
     Z0 = Y0 - (Vhat @ R0 @ Vhat.T)
-    yhat_true, vhat_true, v_true = load_true()
 
     Y = Y0
     R = R0
