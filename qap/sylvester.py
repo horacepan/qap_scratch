@@ -74,6 +74,27 @@ def save_all(directory):
         fname = os.path.join(directory, f'c{n}.npy')
         np.save(fname, mat)
 
+def load_intw(n, directory='../intertwiners'):
+    fname = os.path.join(directory, f'c{n}.npy')
+    return np.load(fname)
+
+def test_intw(n, ntest=10):
+    C = load_intw(n)
+    Cinv = np.linalg.inv(C)
+
+    kron_rhos = [SnIrrep((n - 2, 1, 1)),
+                 SnIrrep((n - 2, 2)),
+                 SnIrrep((n - 1, 1)), SnIrrep((n - 1, 1)), SnIrrep((n - 1, 1)),
+                 SnIrrep((n,)), SnIrrep((n,))]
+
+    for _ in range(ntest):
+        rp = rand_perm(n)
+        kp = np.kron(rp.mat(), rp.mat())
+        blocked = gen_block(kron_rhos, rp)
+        pdb.set_trace()
+        print(np.allclose(Cinv@kp@C, blocked, atol=1e-6), np.allclose(kp@C - C@blocked, 0, atol=1e-6))
+
+    print(same)
+
 if __name__ == '__main__':
-    directory = '../intertwiners/'
-    save_all(directory)
+    pass
