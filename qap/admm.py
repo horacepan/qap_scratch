@@ -4,7 +4,6 @@ import time
 import argparse
 from tqdm import tqdm
 import numpy as np
-from scipy.linalg import eig
 import scipy.io
 import matplotlib.pyplot as plt
 
@@ -20,6 +19,12 @@ def psd_project(mat):
     S, U = np.linalg.eigh(mat)
     pos_idx = S > 0
     return (U[:, pos_idx] * S[pos_idx]) @ U[:, pos_idx].T
+
+def make_L(A, B):
+    Ldim = 1 + A.shape[0] * A.shape[0]
+    L = np.zeros((Ldim, Ldim))
+    L[1:, 1:] = np.kron(B, A)
+    return L
 
 def make_y0(n):
     n2 = n * n
@@ -37,7 +42,10 @@ def make_r0(n, Vhat, Yhat):
     R0 = (R0 + R0.T) / 2.
     return R0
 
-def make_vhat(V):
+def make_vhat(n):
+    V = np.concatenate([np.eye(n - 1), -np.ones((1, n - 1))])
+    V, _ = np.linalg.qr(V, 'reduced')
+
     n, n1 = V.shape
     vxv = np.kron(V, V)
     r1 = np.zeros((1, n1 * n1 + 1))
@@ -72,17 +80,7 @@ def make_gangster(n):
                 J[1+i*n: 1+(i+1)*n, 1+j*n: 1+(j+1)*n] = eye_n
     return J.astype(bool)
 
-def load_true():
-    ys = scipy.io.loadmat('yhat.mat')
-    vs = scipy.io.loadmat('vhat.mat')
-    v = scipy.io.loadmat('v.mat')
-
-    yhat = ys['Yhat'].toarray()
-    vhat = vs['Vhat'].toarray()
-    v = v['V']
-    return yhat, vhat, v
-
-def admm_qap(L, Vhat, J, args, V, n):
+def admm_qap(L, Vhat, J, args, n):
     st = time.time()
     maxit = args.maxit
     tol = args.tol
@@ -180,14 +178,10 @@ def main(args):
     B = mats['B']
     n = A.shape[0]
 
-    Ldim = 1 + A.shape[0] * A.shape[0]
-    L = np.zeros((Ldim, Ldim))
-    L[1:, 1:] = np.kron(B, A)
-    V = np.concatenate([np.eye(n - 1), -np.ones((1, n - 1))])
-    V, _ = np.linalg.qr(V, 'reduced')
-    Vhat = make_vhat(V)
+    L = make_L(A, B)
+    Vhat = make_vhat(n)
     J = make_gangster(n)
-    admm_qap(L, Vhat, J, args, V, n)
+    admm_qap(L, Vhat, J, args, n)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
