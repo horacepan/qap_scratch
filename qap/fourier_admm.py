@@ -9,6 +9,7 @@ import scipy.io
 import matplotlib.pyplot as plt
 
 from admm import make_vhat, make_gangster, make_L, make_y0, make_r0, lower_bound
+from snpy.utils import hook_length
 
 PREFIX = '../data/datasets1/'
 
@@ -16,7 +17,19 @@ def load_cg_transform(n, directory):
     fname = os.path.join(directory, f'c{n}.npy')
     return np.load(fname)
 
-def fourier_admm_qap(L, Vhat, J, args, n):
+def make_blocked(blocks, n):
+    bmat = np.zeros((n * n, n * n))
+    irreps = [(n - 2, 1, 1), (n - 2, 2), (n - 1, 1), (n - 1, 1), (n - 1, 1), (n,), (n,)]
+    idx = 0
+
+    for irrep in irreps:
+        dim = hook_length(irrep)
+        bmat[idx: idx+d, idx: idx+d] = irreps[irrep]
+        idx += dim
+
+    return bmat
+
+def fourier_admm_qap(L, Vhat, J, args, n, outer_AB):
     st = time.time()
     maxit = args.maxit
     tol = args.tol
@@ -27,15 +40,25 @@ def fourier_admm_qap(L, Vhat, J, args, n):
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
     L = L * (n*n / normL)
+    mask = make_bdiag_mask(n)
     beta = n / 3.
 
     Y0 = make_y0(n)
-    R0 = make_r0(n, Vhat, Y0)
+    # R0 = make_r0(n, Vhat, Y0)
+    R0 = np.eye((n-1)**2 + 1)
     Z0 = Y0 - (Vhat @ R0 @ Vhat.T)
 
     Y = Y0
     R = R0
     Z = Z0
+    C = load_cg_transform(n, '../intertwiners/c{n}.npy')
+    blocks = {
+        (n - 2, 1, 1): np.eye(hook_length((n - 2, 1, 1))),
+        (n - 2, 2)   : np.eye(hook_length((n - 2, 2))),
+        (n - 1, 1)   : np.eye(hook_length((n - 1, 1))),
+        (n,)         : np.eye(1),
+    }
+    B = make_blocked(blocks, n)
 
     for i in tqdm(range(maxit)):
         R_pre_proj = Vhat.T @ (Y + Z / beta) @ Vhat
@@ -57,7 +80,8 @@ def fourier_admm_qap(L, Vhat, J, args, n):
                 VRV = np.zeros(Y.shape)
 
         # update Y
-        Y = VRV - ((L + Z) / beta)
+        # Y = VRV - ((L + Z) / beta)
+        Y = CBC - ((L + Z) / beta)
         Y = (Y + Y.T) / 2.
         Y[J] = 0; Y[0,0] = 1
         Y = np.minimum(1, np.maximum(0, Y))
@@ -66,7 +90,8 @@ def fourier_admm_qap(L, Vhat, J, args, n):
         pR = Y - VRV
 
         # update Z
-        Z = Z + gamma * beta * (Y - VRV)
+        # Z = Z + gamma * beta * (Y - VRV)
+        Z = Z + gamma * beta * (Y - CBC)
         Z = (Z + Z.T) / 2.
         Z[np.abs(Z) < tol] = 0
 
@@ -74,11 +99,12 @@ def fourier_admm_qap(L, Vhat, J, args, n):
             scale = normL / (n * n)
             npr = np.linalg.norm(pR, 'fro')
             lbd = lower_bound(L, J, Vhat, Z, n, scale=scale)
-            print(f'Iter {i} | Lower bound: {lbd:.2f} | pR: {npr:.6f}')
+            dy = np.square(Y.dot(np.ones(len(Y))) - np.ones(len(Y))).sum()
+            dyt = np.square(Y.T.dot(np.ones(len(Y))) - np.ones(len(Y))).sum()
+            print(f'Iter {i} | Lower bound: {lbd:.2f} | pR: {npr:.6f} | Ye - e: {dy:.4f} {dyt:.4f}')
 
     tt = time.time() - st
     print('Done! | Elapsed: {:.2f}min'.format(tt / 60))
-
 
 def main(args):
     np.random.seed(args.seed)
@@ -94,7 +120,7 @@ def main(args):
     Vhat = make_vhat(n)
     J = make_gangster(n)
     L = make_L(A, B)
-    fourier_admm_qap(L, Vhat, J, args, n)
+    fourier_admm_qap(L, Vhat, J, args, n, outer_AB)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

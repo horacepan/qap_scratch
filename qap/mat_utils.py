@@ -3,6 +3,7 @@ import time
 import random
 import numpy as np
 from snpy.perm import Perm
+import matplotlib.pyplot as plt
 
 def vec(p):
     return np.reshape(p, (-1, 1), order='F')
@@ -23,7 +24,7 @@ def random_perm(n, iters=100):
 
     return p
 
-def k2v(kp, vp):
+def k2v(kp):
     '''
     Convert kron -> vec vec.T
     '''
@@ -36,12 +37,12 @@ def k2v(kp, vp):
             output[row_idx] = block.reshape(1, -1, order='F')
     return output
 
-def v2k(kp, vp):
+def v2k(vp):
     '''
     Convert vec vec.T -> kron
     '''
-    output = np.zeros(kp.shape)
-    n = int(kp.shape[0] ** 0.5)
+    output = np.zeros(vp.shape)
+    n = int(vp.shape[0] ** 0.5)
     for i in range(n):
         for j in range(n):
             row_idx = i + (j * n)
@@ -50,22 +51,28 @@ def v2k(kp, vp):
     return output
 
 def main():
-    n = 30
+    n = 12
     p = random_perm(n)
     pm = p.mat()
 
     kp = kron(pm)
     vp = outer(pm)
     st = time.time()
-    kp2v = k2v(kp, vp)
+    kp2v = k2v(kp)
     end = time.time()
 
     vst = time.time()
-    vp2k = v2k(kp, vp)
+    vp2k = v2k(vp)
     vend = time.time()
     print('Convert kron to vec : {} | Elapsed: {:.3f}s'.format(np.allclose(kp2v, vp), 2 * (end - st)))
     print('Convert vec  to kron: {} | Elapsed: {:.3f}s'.format(np.allclose(vp2k, kp), 2 * (vend - vst)))
-    pdb.set_trace()
+    c2 = np.load('../intertwiners/c12.npy')
+    blocked = c2 @ kp @ c2.T
+    b2 = c2.T @ kp @ c2
+    plt.spy(np.round(blocked, 4))
+    plt.show()
+    plt.spy(np.round(b2, 4))
+    plt.show()
 
 if __name__ == '__main__':
     main()
