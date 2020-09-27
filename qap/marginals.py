@@ -51,6 +51,10 @@ def decompose_n22(_lambda):
     return irreps, cols
 
 def c_lambda(_lambda):
+    '''
+    Returns: the change of basis C such that
+        C @ [perm module of young tabloid] = block diag @ C
+    '''
     n = sum(_lambda)
     irrep, cols = qap_decompose(_lambda)
     if _lambda[0] == n - 1:
@@ -73,6 +77,7 @@ def c_lambda(_lambda):
 
     mat = np.concatenate(stacks, axis=0)
     if mat.shape[0] != mat.shape[1]:
-        print([hook_length(i) for i in irrep], irrep)
-        pdb.set_trace()
+        #print([hook_length(i) for i in irrep], irrep)
+        #pdb.set_trace()
+        pass
     return mat
