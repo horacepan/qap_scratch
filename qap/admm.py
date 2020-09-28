@@ -14,27 +14,6 @@ from snpy.utils import hook_length
 
 PREFIX = '../data/datasets1/'
 
-def make_bdiag_mask(n):
-    irreps = [
-        (n - 2, 1, 1),
-        (n - 2, 2),
-        (n - 1, 1),
-        (n - 1, 1),
-        (n - 1, 1),
-        (n,),
-        (n,),
-    ]
-    hls = [int(hook_length(p)) for p in irreps]
-    size = sum(hls)
-    mask = np.zeros((size, size))
-
-    idx = 0
-    for l in hls:
-        mask[idx: idx+l, idx:idx+l] = 1
-        idx += l
-
-    return mask
-
 def fnorm(m):
     return np.linalg.norm(m, 'fro')
 
@@ -113,7 +92,7 @@ def make_gangster(n):
                 J[1+i*n: 1+(i+1)*n, 1+j*n: 1+(j+1)*n] = eye_n
     return J.astype(bool)
 
-def admm_qap(A, B, C, args):
+def admm_qap(A, B, C, args, ub=None):
     '''
     A: Flow matrix
     B: Distance matrix
@@ -188,7 +167,11 @@ def admm_qap(A, B, C, args):
 
     tt = time.time() - st
     print('Done! | Lbd: {:.2f} | Elapsed: {:.2f}min'.format(lbd, tt / 60))
-    return
+    if ub is not None and lbd > ub:
+        lbd = np.ceil(lbd)
+        ubd = lbd
+
+    return lbd, ubd
 
 def lower_bound(L, J, Vhat, Z, n, scale=1):
     That = make_that(n)

@@ -2,8 +2,23 @@ import pdb
 import time
 import random
 import numpy as np
-from snpy.perm import Perm
+from snpy.perm import Perm, sn
 import matplotlib.pyplot as plt
+
+def brute_solve(A, B, C):
+    n = A.shape[0]
+    val = float('inf')
+    opt_perm = None
+
+    for p in sn(n):
+        pm = p.mat()
+        obj = np.trace((A @ pm @ B @ pm.T) + 2*(C @ pm.T))
+
+        if obj < val:
+            val = obj
+            opt_perm = p
+
+    return val, opt_perm
 
 def vec(p):
     return np.reshape(p, (-1, 1), order='F')
