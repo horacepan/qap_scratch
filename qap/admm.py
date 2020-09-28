@@ -5,6 +5,7 @@ import argparse
 from tqdm import tqdm
 import numpy as np
 import scipy.io
+import scipy.optimize
 import matplotlib.pyplot as plt
 
 from mat_utils import v2k, k2v, random_perm
@@ -45,9 +46,16 @@ def psd_project(mat):
     pos_idx = S > 0
     return (U[:, pos_idx] * S[pos_idx]) @ U[:, pos_idx].T
 
-def make_L(A, B):
+def make_L(A, B, C=None):
+    if C is None:
+        cvec = np.zeros(A.shape[0]*A.shape[1])
+    else:
+        cvec = np.reshape(C, -1, 'F')
+
     Ldim = 1 + A.shape[0] * A.shape[0]
     L = np.zeros((Ldim, Ldim))
+    L[0, 1:] = cvec
+    L[1:, 0] = cvec
     L[1:, 1:] = np.kron(B, A)
     return L
 
@@ -105,7 +113,13 @@ def make_gangster(n):
                 J[1+i*n: 1+(i+1)*n, 1+j*n: 1+(j+1)*n] = eye_n
     return J.astype(bool)
 
-def admm_qap(A, B, args):
+def admm_qap(A, B, C, args):
+    '''
+    A: Flow matrix
+    B: Distance matrix
+    C: linear cost matrix
+    args: maxit, tol, gamma, low_rank
+    '''
     n = A.shape[0]
     L = make_L(A, B)
     Vhat = make_vhat(n)
@@ -116,7 +130,6 @@ def admm_qap(A, B, args):
     tol = args.tol
     gamma = args.gamma
     low_rank = args.low_rank
-    K = args.K
 
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
@@ -130,6 +143,8 @@ def admm_qap(A, B, args):
     Y = Y0
     R = R0
     Z = Z0
+    lbd = -float('inf')
+    ubd = float('inf')
 
     for i in range(maxit):
         R_pre_proj = Vhat.T @ (Y + Z / beta) @ Vhat
@@ -166,10 +181,10 @@ def admm_qap(A, B, args):
 
         if i % 100 == 0:
             scale = normL / (n * n)
-            npr = np.linalg.norm(pR, 'fro')
-            lbd = lower_bound(L, J, Vhat, Z, n, scale=scale)
-            dy = np.square(Y.dot(np.ones(len(Y))) - np.ones(len(Y))).sum()
-            print(f'Iter {i} | Lower bound: {lbd:.2f} | pR: {npr:.6f}')
+            lbd = max(lbd, lower_bound(L, J, Vhat, Z, n, scale=scale))
+            ubd = min(ubd, upper_bound(Y, A, B))
+            npr = get_ubd(random_perm(n).mat(), A, B)
+            print(f'Iter {i} | Lower bound: {lbd:.2f} | Upper bound: {ubd:.2f} | Rand: {npr:.2f}')
 
     tt = time.time() - st
     print('Done! | Lbd: {:.2f} | Elapsed: {:.2f}min'.format(lbd, tt / 60))
@@ -202,6 +217,43 @@ def lower_bound(L, J, Vhat, Z, n, scale=1):
     lbd = ((L + Zp) * Yp).sum() * scale
     return lbd
 
+def upper_bound(Y, A, B):
+    n = int((Y.shape[0] - 1) ** 0.5)
+    Yloc = (Y + Y.T) / 2.
+    D, U = np.linalg.eigh(Y)
+    d = D[-1]
+    u = np.reshape(U[:, -1], (-1, 1), 'F')
+    Yloc_hat = (d * u @ u.T)
+    Xloc_hat = np.reshape(Yloc_hat[1:, 0], (n, n), 'F')
+
+    en = np.ones((n, 1))
+    In = np.eye(n)
+    ein = np.kron(en.T, In)
+    ien = np.kron(In, en.T)
+    A_eq = np.concatenate([ein, ien])[:-1, :]
+    b_eq = np.ones((2 * n, 1))[:-1, :]
+    bounds = [0, 1]
+    c = np.reshape(Xloc_hat, -1, 'F')
+    eig_res = scipy.optimize.linprog(-c, A_eq=A_eq, b_eq=b_eq, bounds=bounds,
+        method='simplex'
+    )
+
+    eig_X = np.reshape(eig_res.x, (n, n), 'F')
+    eig_ubd = get_ubd(eig_X, A, B)
+
+    Yloc_hat = Yloc
+    Xloc_hat = np.reshape(Yloc_hat[1:, 0], (n, n), 'F')
+    col_res = scipy.optimize.linprog(-c, A_eq=A_eq, b_eq=b_eq, bounds=bounds,
+        method='simplex'
+    )
+    col_X = np.reshape(col_res.x, (n, n), 'F')
+    col_ubd = get_ubd(col_X, A, B)
+
+    return min(eig_ubd, col_ubd)
+
+def get_ubd(simplex_X, A, B):
+    return np.trace(A @ simplex_X @ B @ simplex_X.T)
+
 def main(args):
     np.random.seed(args.seed)
     fname = os.path.join(PREFIX, args.ex + '.mat')
@@ -209,15 +261,14 @@ def main(args):
 
     A = mats['A']
     B = mats['B']
-    admm_qap(A, B, args)
+    admm_qap(A, B, C=None, args=args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ex', type=str, default='nug20')
+    parser.add_argument('--ex', type=str, default='nug12')
     parser.add_argument('--maxit', type=int, default=1000)
     parser.add_argument('--tol', type=float, default=1e-5)
     parser.add_argument('--low_rank', action='store_true', default=False)
-    parser.add_argument('--K', type=int, default=1)
     parser.add_argument('--gamma', type=float, default=1.618)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
