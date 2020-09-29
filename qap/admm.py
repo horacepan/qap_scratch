@@ -92,7 +92,7 @@ def make_gangster(n):
                 J[1+i*n: 1+(i+1)*n, 1+j*n: 1+(j+1)*n] = eye_n
     return J.astype(bool)
 
-def admm_qap(A, B, C, args, ub=None):
+def admm_qap(A, B, C, ub=None, args=None):
     '''
     A: Flow matrix
     B: Distance matrix
@@ -100,15 +100,21 @@ def admm_qap(A, B, C, args, ub=None):
     args: maxit, tol, gamma, low_rank
     '''
     n = A.shape[0]
-    L = make_L(A, B)
+    L = make_L(A, B, C)
     Vhat = make_vhat(n)
     J = make_gangster(n)
 
     st = time.time()
-    maxit = args.maxit
-    tol = args.tol
-    gamma = args.gamma
-    low_rank = args.low_rank
+    if args:
+        maxit = args.maxit
+        tol = args.tol
+        gamma = args.gamma
+        low_rank = args.low_rank
+    else:
+        maxit = 1000
+        tol = 1e-6
+        gamma = 1.618
+        low_rank = False
 
     normL = np.linalg.norm(L)
     Vhat_nrows = Vhat.shape[0]
@@ -130,7 +136,7 @@ def admm_qap(A, B, C, args, ub=None):
         R_pre_proj = (R_pre_proj + R_pre_proj.T) / 2.
 
         S, U = np.linalg.eigh(R_pre_proj)
-        if not args.low_rank:
+        if not low_rank:
             pos_idx = S > 0
             if pos_idx.sum() > 0:
                 vhat_u = Vhat @ U[:, pos_idx]
@@ -163,12 +169,17 @@ def admm_qap(A, B, C, args, ub=None):
             lbd = max(lbd, lower_bound(L, J, Vhat, Z, n, scale=scale))
             ubd = min(ubd, upper_bound(Y, A, B))
             npr = get_ubd(random_perm(n).mat(), A, B)
-            print(f'Iter {i} | Lower bound: {lbd:.2f} | Upper bound: {ubd:.2f} | Rand: {npr:.2f}')
+            if args.verbose:
+                print(f'Iter {i} | Lower bound: {lbd:.2f} | Upper bound: {ubd:.2f} | Rand: {npr:.2f}')
 
     tt = time.time() - st
-    print('Done! | Lbd: {:.2f} | Elapsed: {:.2f}min'.format(lbd, tt / 60))
+    if args.verbose:
+        print('Done! | Lbd: {:.2f} | Elapsed: {:.2f}min'.format(lbd, tt / 60))
+
+    lbd = np.ceil(lbd)
     if ub is not None and lbd > ub:
-        lbd = np.ceil(lbd)
+        ubd = max(lbd, ubd)
+    if lbd > ubd:
         ubd = lbd
 
     return lbd, ubd
@@ -198,7 +209,7 @@ def lower_bound(L, J, Vhat, Z, n, scale=1):
     Yp[L + Zp < 0] = 1
     Yp[J] = 0; Yp[0, 0] = 1
     lbd = ((L + Zp) * Yp).sum() * scale
-    return lbd
+    return np.ceil(lbd)
 
 def upper_bound(Y, A, B):
     n = int((Y.shape[0] - 1) ** 0.5)
@@ -244,7 +255,8 @@ def main(args):
 
     A = mats['A']
     B = mats['B']
-    admm_qap(A, B, C=None, args=args)
+    C = np.zeros(A.shape)
+    admm_qap(A, B, C, ub=None, args=args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -254,5 +266,6 @@ if __name__ == '__main__':
     parser.add_argument('--low_rank', action='store_true', default=False)
     parser.add_argument('--gamma', type=float, default=1.618)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--verbose', action='store_true', default=False)
     args = parser.parse_args()
     main(args)

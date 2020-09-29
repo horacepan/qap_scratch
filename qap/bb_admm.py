@@ -56,14 +56,15 @@ def bb_admm(A, B, C, ub, X, i, j, args):
         cst = np.trace(Fc@Dc + Cc)
 
         try:
-            lbb, ubb = admm_qap(Fa, Da, Ca, args, ub - cst)
+            lbb, ubb = admm_qap(Fa, Da, Ca, ub - cst, args)
             lbb = lbb + cst
             ubb = ubb + cst
         except Exception as e:
             print(f'Bound error: {e}')
             lbb = -float('inf')
             ubb = float('inf')
-    return lbb, ubb
+        #print(f'Assignment {i}->{j} | cst: {cst:.2f} | lb: {lbb:.2f} | ubb: {ub:.2f}')
+    return lbb, ubb, Xa
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
