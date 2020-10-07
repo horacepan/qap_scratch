@@ -29,7 +29,7 @@ function [X, out]= OptStiefelGBB(X, fun, opts, varargin)
 %                 gtol        stop control for the projected gradient
 %                 ftol        stop control for |F_k - F_{k-1}|/(1+|F_{k-1}|)
 %                             usually, max{xtol, gtol} > ftol
-%   
+%
 % Output:
 %           X --- solution
 %         Out --- output information
@@ -38,12 +38,12 @@ function [X, out]= OptStiefelGBB(X, fun, opts, varargin)
 % For example, consider the eigenvalue problem F(X) = -0.5*Tr(X'*A*X);
 %
 % function demo
-% 
+%
 % function [F, G] = fun(X,  A)
 %   G = -(A*X);
 %   F = 0.5*sum(dot(G,X,1));
 % end
-% 
+%
 % n = 1000; k = 6;
 % A = randn(n); A = A'*A;
 % opts.record = 0; %
@@ -51,17 +51,17 @@ function [X, out]= OptStiefelGBB(X, fun, opts, varargin)
 % opts.xtol = 1e-5;
 % opts.gtol = 1e-5;
 % opts.ftol = 1e-8;
-% 
+%
 % X0 = randn(n,k);    X0 = orth(X0);
 % tic; [X, out]= OptStiefelGBB(X0, @fun, opts, A); tsolve = toc;
 % out.fval = -2*out.fval; % convert the function value to the sum of eigenvalues
 % fprintf('\nOptM: obj: %7.6e, itr: %d, nfe: %d, cpu: %f, norm(XT*X-I): %3.2e \n', ...
 %             out.fval, out.itr, out.nfe, tsolve, norm(X'*X - eye(k), 'fro') );
-% 
+%
 % end
 % -------------------------------------
 %
-% Reference: 
+% Reference:
 %  Z. Wen and W. Yin
 %  A feasible method for optimization with orthogonality constraints
 %
@@ -109,14 +109,14 @@ eta     = opts.eta;
 gamma   = opts.gamma;
 retr    = opts.retr;
 record  = opts.record;
-nt      = opts.nt;  
+nt      = opts.nt;
 crit    = ones(nt, 3);
 tiny    = opts.tiny;
 %-------------------------------------------------------------------------------
 
 %% Initial function value and gradient
 % prepare for iterations
-[F,  G] = feval(fun, X , varargin{:});  out.nfe = 1;  
+[F,  G] = feval(fun, X , varargin{:});  out.nfe = 1;
 GX = G'*X;
 
 if retr == 1
@@ -149,7 +149,7 @@ for itr = 1 : opts.mxitr
 
     nls = 1; deriv = rhols*nrmG^2; %deriv
     while 1
-        % calculate G, F,        
+        % calculate G, F,
         if retr == 1
             if invH
                 [X, infX] = linsolve(eye(n) + tau*H, XP - tau*RX);
@@ -160,18 +160,19 @@ for itr = 1 : opts.mxitr
         else
             [X, RR] = myQR(XP - tau*dtX, k);
         end
-        
+
+        % if not orthogonal, truncate it
         if norm(X'*X - eye(k),'fro') > tiny; X = myQR(X,k); end
-        
+
         [F,G] = feval(fun, X, varargin{:});
         out.nfe = out.nfe + 1;
-        
+
         if F <= Cval - tau*deriv || nls >= 5
             break;
         end
         tau = eta*tau;          nls = nls+1;
-    end  
-    
+    end
+
     GX = G'*X;
     if retr == 1
         if invH
@@ -183,23 +184,23 @@ for itr = 1 : opts.mxitr
             VX = V'*X;
         end
     end
-    dtX = G - X*GX;     nrmG  = norm(dtX, 'fro');    
+    dtX = G - X*GX;     nrmG  = norm(dtX, 'fro');
     S = X - XP;         XDiff = norm(S,'fro')/sqrt(n);
     tau = opts.tau;     FDiff = abs(FP-F)/(abs(FP)+1);
-    
+
     %Y = G - GP;     SY = abs(iprod(S,Y));
     Y = dtX - dtXP;     SY = abs(iprod(S,Y));
     if mod(itr,2)==0; tau = (norm(S,'fro')^2)/SY;
     else tau  = SY/(norm(Y,'fro')^2); end
     tau = max(min(tau, 1e20), 1e-20);
-    
+
     if (record >= 1)
         fprintf('%4d  %3.2e  %4.3e  %3.2e  %3.2e  %3.2e  %2d\n', ...
             itr, tau, F, nrmG, XDiff, FDiff, nls);
         %fprintf('%4d  %3.2e  %4.3e  %3.2e  %3.2e (%3.2e, %3.2e)\n', ...
         %    itr, tau, F, nrmG, XDiff, alpha1, alpha2);
     end
-    
+
     crit(itr,:) = [nrmG, XDiff, FDiff];
     mcrit = mean(crit(itr-min(nt,itr)+1:itr, :),1);
     %if (XDiff < xtol && nrmG < gtol ) || FDiff < ftol
@@ -211,7 +212,7 @@ for itr = 1 : opts.mxitr
         out.msg = 'converge';
         break;
     end
-    
+ 
     Qp = Q; Q = gamma*Qp + 1; Cval = (gamma*Qp*Cval + F)/Q;
  end
 
@@ -240,6 +241,7 @@ end
 
 
 
+% rounds the Rs to +/- 1
 function [Q, RR] = myQR(XX,k)
 [Q, RR] = qr(XX, 0);
 diagRR = sign(diag(RR)); ndr = diagRR < 0;

@@ -1,65 +1,83 @@
 import numpy as np
+from qap_utils import qap_func
 
-def qap_func(A, B, C=None):
-    if C is None:
-        C = np.zeros(A.shape)
+def opt(func, grad_func, X, args):
+    eta = args.eta
+    tau = args.tau
+    rho - args.rho
+    maxit = args.maxit
+    tol = args.tol
 
-    def fg(X):
-        f = np.trace(A @ X @ B @ X.T) + 2 * np.trace(C.T @ X)
-        return f
-
-    def g(X):
-        return (A + A.T) @ X @ (B + B.T) + (2 * C.T)
-
-    return f, g
-
-def opt(func, grad_func, X, rho, delta, eta, eps, maxit):
-    k = 0
     n = X.shape[0]
-    f, g0 = func(X), grad_func(X)
     In = np.eye(n)
-    C = f
+    F, G = func(X), grad_func(X)
+
+    GX = G.T @ X
+    GXT = G @ X.T
+    dtX = G - X@GX
+    H = 0.5 * (GXT - GXT.T)
+    RX = H @ X
+
+    normG = np.linalg.norm(dtX, 'fro')
+    C = F
     Q = 1
 
     for k in range(maxit):
-        while True:
-            Yk_tau = np.solve(In + tau/2, In - tau/2)
-            fyk_tau = func(Yk_tau)
+        XP = X
+        FP = F
+        dtXP = dtX
+        nls = 0
+        deriv = rho * (normG**2)
 
-            if fyk_tau <= C + rho1 * tau * g0:
+        while True:
+            X = np.linalg.solve(In + tau*H, XP - tau*RX)
+
+            if np.linalg.norm(X.T@X - In, 'fro') > tol:
+                X, _ = myQR(X)
+
+            F = func(X)
+            G = grad_func(X)
+
+            if F <= C - tau * normG:
                 break
 
-            tau = delta * tau
+            tau = eta * tau
 
-        Xprev = X
-        grad_prev = grad_func(X)
-        X = Yk_tau
-        grad_now = grad_func(X)
+        GX = G.T @ X
+        GXT = G @ X.T
+        H = 0.5 * (GXT - GXT.T)
+        RX = H @ X
+        dtX = G - X@GX
 
-        Q = eta * Q + 1
-        C = ((eta * Q * C) + f(X)) / Q
-        S = X - Xprev
-        Yk = grad_now - grad_prev
+        S = X - XP
+        Y = dtX - dtP
+        if k % 2 == 0:
+            tau = (S * S).sum() / SY
+        else:
+            tau = SY / np.abs(Y*Y).sum()
 
-        # update tau
-        SY = (S*Y).sum()
-        tau_k1 = (S * S).sum() / SY
-        tau_k2 = SY / np.abs(Y*Y).sum()
+        QP = Q
+        Q = gamma * Q + 1
+        C = ((gamma * QP * C) + F) / Q
 
     return X
 
-def main():
+def main(args):
+    n = 6
     A = np.random.random((n, n))
     B = np.random.random((n, n))
     X = np.random.random((n, n))
 
     qap_f, qap_g = qap_func(A, B)
-    rho = 1e-2
-    nabla = 1e-2
-    eta = 1e-2
-    eps = 1e-2
-    maxit = 1000
-    opt(qap_f, qap_g, X, rho, nabla, eta, eps, maxit)
+    opt(qap_f, qap_g, X, args)
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--maxit', type=int, default=1000)
+    parser.add_argument('--tau', type=float, default=1e-3)
+    parser.add_argument('--rho', type=float, default=1e-4)
+    parser.add_argument('--eta', type=float, default=1e-1)
+    parser.add_argument('--gamma', type=float, default=0.85)
+    parser.add_argument('--tol', type=float, default=1e-5)
+    args = parser.parse_args()
+    main(args)
