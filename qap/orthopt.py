@@ -1,12 +1,27 @@
+import pdb
+import argparse
 import numpy as np
-from qap_utils import qap_func
+from qap_utils import qap_func, myQR
+
+def eig_prob(A):
+    '''
+    A is a symmetric matrix
+    '''
+    def f(X):
+        return -0.5 * np.trace(X.T@A@X)
+
+    def g(X):
+        return -A@X
+
+    return f, g
 
 def opt(func, grad_func, X, args):
     eta = args.eta
     tau = args.tau
-    rho - args.rho
+    rho = args.rho
     maxit = args.maxit
     tol = args.tol
+    gamma = args.gamma
 
     n = X.shape[0]
     In = np.eye(n)
@@ -21,6 +36,7 @@ def opt(func, grad_func, X, args):
     normG = np.linalg.norm(dtX, 'fro')
     C = F
     Q = 1
+    X0 = X.copy()
 
     for k in range(maxit):
         XP = X
@@ -30,18 +46,23 @@ def opt(func, grad_func, X, args):
         deriv = rho * (normG**2)
 
         while True:
-            X = np.linalg.solve(In + tau*H, XP - tau*RX)
+            # X = np.linalg.solve(In + tau*H, XP - tau*RX)
+            X = np.linalg.solve(In + tau*RX, XP - tau*RX)
 
-            if np.linalg.norm(X.T@X - In, 'fro') > tol:
+            if np.linalg.norm((X.T@X) - In, 'fro') > tol:
                 X, _ = myQR(X)
 
             F = func(X)
             G = grad_func(X)
 
-            if F <= C - tau * normG:
+            if F <= C - tau * deriv:
                 break
 
             tau = eta * tau
+            nls += 1
+            print(f'Iter: {k:4d} | search iters: {nls:} | F: {F:.4f} | UB: {C - tau*deriv:.4f} | C: {C} | tau: {tau}')
+            if nls > 10:
+                pdb.set_trace()
 
         GX = G.T @ X
         GXT = G @ X.T
@@ -50,7 +71,8 @@ def opt(func, grad_func, X, args):
         dtX = G - X@GX
 
         S = X - XP
-        Y = dtX - dtP
+        Y = dtX - dtXP
+        SY = (S*Y).sum()
         if k % 2 == 0:
             tau = (S * S).sum() / SY
         else:
@@ -60,16 +82,21 @@ def opt(func, grad_func, X, args):
         Q = gamma * Q + 1
         C = ((gamma * QP * C) + F) / Q
 
+        if k % 10 == 0:
+            print(f'Iter {k:4d} | f(X) = {F:.4f}')
     return X
 
 def main(args):
     n = 6
     A = np.random.random((n, n))
+    A = A + A.T
     B = np.random.random((n, n))
     X = np.random.random((n, n))
 
-    qap_f, qap_g = qap_func(A, B)
-    opt(qap_f, qap_g, X, args)
+    #f, g = qap_func(A, B)
+    f, g = eig_prob(A)
+    Xopt = opt(f, g, X, args)
+    print('Opt val: {:.2f}'.format(X))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
