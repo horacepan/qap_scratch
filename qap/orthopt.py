@@ -47,7 +47,7 @@ def opt(func, grad_func, X, args):
 
         while True:
             # X = np.linalg.solve(In + tau*H, XP - tau*RX)
-            X = np.linalg.solve(In + tau*RX, XP - tau*RX)
+            X = np.linalg.solve(In + tau*H, XP - tau*H)
 
             if np.linalg.norm((X.T@X) - In, 'fro') > tol:
                 X, _ = myQR(X)
@@ -55,7 +55,7 @@ def opt(func, grad_func, X, args):
             F = func(X)
             G = grad_func(X)
 
-            if F <= C - tau * deriv:
+            if F <= C - tau * deriv + tol:
                 break
 
             tau = eta * tau
@@ -82,18 +82,22 @@ def opt(func, grad_func, X, args):
         Q = gamma * Q + 1
         C = ((gamma * QP * C) + F) / Q
 
-        if k % 10 == 0:
-            print(f'Iter {k:4d} | f(X) = {F:.4f}')
+        Xdiff = np.linalg.norm(X - XP, 'fro')
+        Fdiff = np.abs(F - FP) / (abs(FP) + 1)
+        print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
     return X
 
 def main(args):
-    n = 6
+    n = 1000
     A = np.random.random((n, n))
     A = A + A.T
     B = np.random.random((n, n))
     X = np.random.random((n, n))
+    X, _ = np.linalg.qr(X)
 
-    #f, g = qap_func(A, B)
+    Vs, _ = np.linalg.eig(A)
+    print('Sum eigs: {}'.format(np.sum(Vs) * -0.5))
+
     f, g = eig_prob(A)
     Xopt = opt(f, g, X, args)
     print('Opt val: {:.2f}'.format(X))
@@ -101,10 +105,11 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--maxit', type=int, default=1000)
-    parser.add_argument('--tau', type=float, default=1e-3)
-    parser.add_argument('--rho', type=float, default=1e-4)
+    parser.add_argument('--tau', type=float, default=1e-1)
+    parser.add_argument('--rho', type=float, default=1e-1)
     parser.add_argument('--eta', type=float, default=1e-1)
     parser.add_argument('--gamma', type=float, default=0.85)
     parser.add_argument('--tol', type=float, default=1e-5)
+    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
     main(args)
