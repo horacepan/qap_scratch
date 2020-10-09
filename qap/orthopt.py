@@ -1,7 +1,7 @@
 import pdb
 import argparse
 import numpy as np
-from qap_utils import qap_func, myQR
+from qap_utils import qap_func, myQR, qap_func_hadamard
 
 def eig_prob(A):
     '''
@@ -46,8 +46,8 @@ def opt(func, grad_func, X, args):
         deriv = rho * (normG**2)
 
         while True:
-            # X = np.linalg.solve(In + tau*H, XP - tau*RX)
-            X = np.linalg.solve(In + tau*H, XP - tau*H)
+            X = np.linalg.solve(In + tau*H, XP - tau*RX)
+            # X = np.linalg.solve(In + tau*H, XP - tau*H)
 
             if np.linalg.norm((X.T@X) - In, 'fro') > tol:
                 X, _ = myQR(X)
@@ -61,7 +61,7 @@ def opt(func, grad_func, X, args):
             tau = eta * tau
             nls += 1
             print(f'Iter: {k:4d} | search iters: {nls:} | F: {F:.4f} | UB: {C - tau*deriv:.4f} | C: {C} | tau: {tau}')
-            if nls > 10:
+            if nls > 30:
                 pdb.set_trace()
 
         GX = G.T @ X
@@ -105,7 +105,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--maxit', type=int, default=1000)
-    parser.add_argument('--tau', type=float, default=1e-1)
+    parser.add_argument('--tau', type=float, default=1e-3)
     parser.add_argument('--rho', type=float, default=1e-1)
     parser.add_argument('--eta', type=float, default=1e-1)
     parser.add_argument('--gamma', type=float, default=0.85)

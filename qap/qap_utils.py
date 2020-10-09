@@ -13,6 +13,19 @@ def qap_func(A, B, C=None):
 
     return fg, g
 
+def qap_func_hadamard(A, B, C=None):
+    if C is None:
+        C = np.zeros(A.shape)
+
+    def fg(X):
+        XX = X*X
+        f = np.trace(A @ XX @ B @ XX.T) + 2 * np.trace(C.T @ XX)
+
+    def g(X):
+        XX = X * X
+        grad = 2*(A @ XX @ B)*X + 2*(A.T @ XX @ B.T)*X + 4*C*X
+        return grad
+
 def myQR(mat):
     Q, R = np.linalg.qr(mat)
     rounded_r = np.sign(np.diag(R))
