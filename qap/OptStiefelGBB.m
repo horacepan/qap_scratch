@@ -251,3 +251,8 @@ if nnz(ndr) > 0
 end
 end
 
+function [F, G] = eig_func(X,  A)
+  G = -(A*X);
+  F = 0.5*sum(dot(G,X,1));
+end
+

@@ -20,11 +20,29 @@ def qap_func_hadamard(A, B, C=None):
     def fg(X):
         XX = X*X
         f = np.trace(A @ XX @ B @ XX.T) + 2 * np.trace(C.T @ XX)
+        return f
 
     def g(X):
         XX = X * X
         grad = 2*(A @ XX @ B)*X + 2*(A.T @ XX @ B.T)*X + 4*C*X
         return grad
+
+    return fg, g
+
+def qap_func_hadamard_lagrangian(A, B, C=None):
+    qapf, qapg = qap_func_hadamard(A, B, C)
+
+    def f(X, _lambda, mu):
+        mask = mu*X < _lambda
+        penalty = ((-_lambda * X) + 0.5*mu*(X*X)) * mask
+        penalty = penalty + ((-_lambda * _lambda) / (2 * mu)) * (1 - mask)
+        return qapf(X) + np.sum(penalty)
+
+    def g(X, _lambda, mu):
+        mask = mu*X < _lambda
+        penalty = (-_lambda + (mu * X)) * mask
+        return qapg(X) + penalty
+    return f, g
 
 def myQR(mat):
     Q, R = np.linalg.qr(mat)

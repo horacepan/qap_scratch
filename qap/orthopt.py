@@ -15,7 +15,7 @@ def eig_prob(A):
 
     return f, g
 
-def opt(func, grad_func, X, args):
+def opt(func, grad_func, X, _lambda, mu, args):
     eta = args.eta
     tau = args.tau
     rho = args.rho
@@ -25,7 +25,7 @@ def opt(func, grad_func, X, args):
 
     n = X.shape[0]
     In = np.eye(n)
-    F, G = func(X), grad_func(X)
+    F, G = func(X, _lambda, mu), grad_func(X, _lambda, mu)
 
     GX = G.T @ X
     GXT = G @ X.T
@@ -52,19 +52,18 @@ def opt(func, grad_func, X, args):
             if np.linalg.norm((X.T@X) - In, 'fro') > tol:
                 X, _ = myQR(X)
 
-            F = func(X)
-            G = grad_func(X)
-
+            F = func(X, _lambda, mu)
+            G = grad_func(X, _lambda, mu)
             if F <= C - tau * deriv + tol:
                 break
 
             tau = eta * tau
             nls += 1
-            print(f'Iter: {k:4d} | search iters: {nls:} | F: {F:.4f} | UB: {C - tau*deriv:.4f} | C: {C} | tau: {tau}')
-            if nls > 30:
-                pdb.set_trace()
+            if nls > 5:
+                break
+                print(f'Iter: {k:4d} | search iters: {nls:} | F: {F:.4f} | UB: {C - tau*deriv:.4f} | C: {C} | tau: {tau}')
 
-        GX = G.T @ X
+        GX = G.T @ X # note this is the lagrange multiplier too
         GXT = G @ X.T
         H = 0.5 * (GXT - GXT.T)
         RX = H @ X
@@ -84,7 +83,13 @@ def opt(func, grad_func, X, args):
 
         Xdiff = np.linalg.norm(X - XP, 'fro')
         Fdiff = np.abs(F - FP) / (abs(FP) + 1)
-        print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
+        if normG < tol or Xdiff < tol or Fdiff < tol:
+            #print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
+            break
+
+        if k % 100 == 0:
+            pass
+            #print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
     return X
 
 def main(args):
@@ -100,13 +105,15 @@ def main(args):
 
     f, g = eig_prob(A)
     Xopt = opt(f, g, X, args)
+    Xopt_round = np.round(Xopt)
     print('Opt val: {:.2f}'.format(X))
+    print('Rounded val: {:.2f}'.format(Xopt_round))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--maxit', type=int, default=1000)
     parser.add_argument('--tau', type=float, default=1e-3)
-    parser.add_argument('--rho', type=float, default=1e-1)
+    parser.add_argument('--rho', type=float, default=1e-4)
     parser.add_argument('--eta', type=float, default=1e-1)
     parser.add_argument('--gamma', type=float, default=0.85)
     parser.add_argument('--tol', type=float, default=1e-5)
