@@ -7,15 +7,15 @@ def eig_prob(A):
     '''
     A is a symmetric matrix
     '''
-    def f(X):
+    def f(X, a1, a2):
         return -0.5 * np.trace(X.T@A@X)
 
-    def g(X):
+    def g(X, a1, a2):
         return -A@X
 
     return f, g
 
-def opt(func, grad_func, X, _lambda, mu, args):
+def opt(func, grad_func, X, mu, args):
     eta = args.eta
     tau = args.tau
     rho = args.rho
@@ -24,6 +24,7 @@ def opt(func, grad_func, X, _lambda, mu, args):
     gamma = args.gamma
 
     n = X.shape[0]
+    _lambda = np.zeros(X.shape)
     In = np.eye(n)
     F, G = func(X, _lambda, mu), grad_func(X, _lambda, mu)
 
@@ -93,21 +94,24 @@ def opt(func, grad_func, X, _lambda, mu, args):
     return X
 
 def main(args):
-    n = 1000
+    n = 100
     A = np.random.random((n, n))
     A = A + A.T
     B = np.random.random((n, n))
     X = np.random.random((n, n))
+    X = X + X.T
     X, _ = np.linalg.qr(X)
-
     Vs, _ = np.linalg.eig(A)
-    print('Sum eigs: {}'.format(np.sum(Vs) * -0.5))
-
     f, g = eig_prob(A)
-    Xopt = opt(f, g, X, args)
+
+    print('Sum eigs: {}'.format(np.sum(Vs) * -0.5))
+    print('Init guess: {}'.format(f(X,0,0)))
+
+    mu = 1
+    Xopt = opt(f, g, X, mu, args)
     Xopt_round = np.round(Xopt)
-    print('Opt val: {:.2f}'.format(X))
-    print('Rounded val: {:.2f}'.format(Xopt_round))
+    print('Opt val: {}'.format(f(Xopt, 0, 0)))
+    pdb.set_trace()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
