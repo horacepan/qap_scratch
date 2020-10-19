@@ -1,16 +1,17 @@
 import pdb
 import argparse
 import numpy as np
+import scipy.io
 from qap_utils import qap_func, myQR, qap_func_hadamard
 
 def eig_prob(A):
     '''
     A is a symmetric matrix
     '''
-    def f(X, a1, a2):
+    def f(X, a1=None, a2=None):
         return -0.5 * np.trace(X.T@A@X)
 
-    def g(X, a1, a2):
+    def g(X, a1=None, a2=None):
         return -A@X
 
     return f, g
@@ -23,9 +24,10 @@ def opt(func, grad_func, X, mu, args):
     tol = args.tol
     gamma = args.gamma
 
-    n = X.shape[0]
+    n, p = X.shape
     _lambda = np.zeros(X.shape)
     In = np.eye(n)
+    Ip = np.eye(p)
     F, G = func(X, _lambda, mu), grad_func(X, _lambda, mu)
 
     GX = G.T @ X
@@ -48,27 +50,26 @@ def opt(func, grad_func, X, mu, args):
 
         while True:
             X = np.linalg.solve(In + tau*H, XP - tau*RX)
-            # X = np.linalg.solve(In + tau*H, XP - tau*H)
 
-            if np.linalg.norm((X.T@X) - In, 'fro') > tol:
+            if np.linalg.norm((X.T@X) - Ip, 'fro') > tol:
                 X, _ = myQR(X)
 
             F = func(X, _lambda, mu)
             G = grad_func(X, _lambda, mu)
-            if F <= C - tau * deriv + tol:
+            if F <= C - tau*deriv:
                 break
 
             tau = eta * tau
             nls += 1
             if nls > 5:
                 break
-                print(f'Iter: {k:4d} | search iters: {nls:} | F: {F:.4f} | UB: {C - tau*deriv:.4f} | C: {C} | tau: {tau}')
 
         GX = G.T @ X # note this is the lagrange multiplier too
         GXT = G @ X.T
         H = 0.5 * (GXT - GXT.T)
         RX = H @ X
         dtX = G - X@GX
+        normG = np.linalg.norm(dtX, 'fro')
 
         S = X - XP
         Y = dtX - dtXP
@@ -84,43 +85,41 @@ def opt(func, grad_func, X, mu, args):
 
         Xdiff = np.linalg.norm(X - XP, 'fro')
         Fdiff = np.abs(F - FP) / (abs(FP) + 1)
-        if normG < tol or Xdiff < tol or Fdiff < tol:
-            #print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
+        if normG < tol or Xdiff < tol:
+            if args.verbose:
+                print(f'Breaking at iter {k} | normG: {normG:.2f} | Xdiff: {Xdiff:.2f} | Fdiff: {Fdiff:.2f}')
             break
 
-        if k % 100 == 0:
-            pass
-            #print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
+        if k % 10 == 0 and args.verbose:
+            print(f'Iter {k:4d} | f(X) = {F:.4f} | normG: {normG:.4f} | Xdiff: {Xdiff:.4f} | FDiff: {Fdiff:.4f}')
     return X
 
 def main(args):
     n = 100
+    p = 6
     A = np.random.random((n, n))
     A = A + A.T
-    B = np.random.random((n, n))
-    X = np.random.random((n, n))
-    X = X + X.T
+    X = np.random.random((n, p))
     X, _ = np.linalg.qr(X)
-    Vs, _ = np.linalg.eig(A)
+
+    Vs, Xs = np.linalg.eig(A)
+    true_eig = sorted(Vs)[-p:]
     f, g = eig_prob(A)
+    mu = None
 
-    print('Sum eigs: {}'.format(np.sum(Vs) * -0.5))
-    print('Init guess: {}'.format(f(X,0,0)))
-
-    mu = 1
+    print('Opt eigs eval: {:.4f}'.format(-sum(true_eig) * 0.5))
     Xopt = opt(f, g, X, mu, args)
-    Xopt_round = np.round(Xopt)
-    print('Opt val: {}'.format(f(Xopt, 0, 0)))
-    pdb.set_trace()
+    print('Opt val: {:.4f}'.format(f(Xopt)))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--maxit', type=int, default=1000)
+    parser.add_argument('--maxit', type=int, default=10000)
     parser.add_argument('--tau', type=float, default=1e-3)
     parser.add_argument('--rho', type=float, default=1e-4)
     parser.add_argument('--eta', type=float, default=1e-1)
     parser.add_argument('--gamma', type=float, default=0.85)
-    parser.add_argument('--tol', type=float, default=1e-5)
+    parser.add_argument('--tol', type=float, default=1e-8)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--verbose', action='store_true', default=False)
     args = parser.parse_args()
     main(args)
