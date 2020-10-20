@@ -1,8 +1,10 @@
+import time
+import os
 import pdb
 import argparse
 import numpy as np
 import scipy.io
-from qap_utils import qap_func, myQR, qap_func_hadamard
+from qap_utils import qap_func, myQR, qap_func_hadamard, qap_func_hadamard_lagrangian, isperm
 
 def eig_prob(A):
     '''
@@ -16,7 +18,7 @@ def eig_prob(A):
 
     return f, g
 
-def opt(func, grad_func, X, mu, args):
+def opt(func, grad_func, X, mu, _lambda, args):
     eta = args.eta
     tau = args.tau
     rho = args.rho
@@ -25,9 +27,9 @@ def opt(func, grad_func, X, mu, args):
     gamma = args.gamma
 
     n, p = X.shape
-    _lambda = np.zeros(X.shape)
     In = np.eye(n)
     Ip = np.eye(p)
+    _lambda = np.zeros(X.shape)
     F, G = func(X, _lambda, mu), grad_func(X, _lambda, mu)
 
     GX = G.T @ X
@@ -87,7 +89,7 @@ def opt(func, grad_func, X, mu, args):
         Fdiff = np.abs(F - FP) / (abs(FP) + 1)
         if normG < tol or Xdiff < tol:
             if args.verbose:
-                print(f'Breaking at iter {k} | normG: {normG:.2f} | Xdiff: {Xdiff:.2f} | Fdiff: {Fdiff:.2f}')
+                print(f'Breaking at iter {k} | normG: {normG:.8f} | Xdiff: {Xdiff:.8f} | Fdiff: {Fdiff:.8f}')
             break
 
         if k % 10 == 0 and args.verbose:
@@ -106,20 +108,75 @@ def main(args):
     true_eig = sorted(Vs)[-p:]
     f, g = eig_prob(A)
     mu = None
+    _lambda = None
 
     print('Opt eigs eval: {:.4f}'.format(-sum(true_eig) * 0.5))
-    Xopt = opt(f, g, X, mu, args)
+    Xopt = opt(f, g, X, mu, _lambda, args)
     print('Opt val: {:.4f}'.format(f(Xopt)))
+
+def qap_main(args):
+    np.random.seed(args.seed)
+    mats= scipy.io.loadmat(args.ex)
+    A = mats['A']
+    B = mats['B']
+
+    f, g = qap_func_hadamard_lagrangian(A, B)
+
+    f_true, g_true = qap_func_hadamard(A, B)
+    _lambda = np.random.random(A.shape)
+
+    X = np.random.random(A.shape)
+    X, _ = np.linalg.qr(X)
+    mu = args.mu
+    prev = float('inf')
+
+    for i in range(101):
+        X = opt(f, g, X, mu, _lambda, args)
+        if i%10 == 0:
+            curr = f(X, _lambda, mu)
+            if args.verbose:
+                print(f'Iter {i:3d} | f(X) = {f(X, _lambda, mu):.3f} | isperm: {isperm(X)}')
+            if np.allclose(prev, curr):
+                break
+            prev = curr
+
+        _lambda = np.max(_lambda - mu*X, 0)
+        mu = 1.2 * mu
+
+    Xround = np.round(X)
+    if args.verbose:
+        print('Rounded f(X): {:.3f}'.format(f(Xround, _lambda, mu)))
+        print('Rounded nopenalty f(X): {:.3f} | is perm: {}'.format(f_true(Xround), isperm(Xround)))
+    return f_true(Xround)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--maxit', type=int, default=10000)
+    parser.add_argument('--ex', type=str, default='had12')
+    parser.add_argument('--maxit', type=int, default=100)
     parser.add_argument('--tau', type=float, default=1e-3)
     parser.add_argument('--rho', type=float, default=1e-4)
     parser.add_argument('--eta', type=float, default=1e-1)
     parser.add_argument('--gamma', type=float, default=0.85)
-    parser.add_argument('--tol', type=float, default=1e-8)
+    parser.add_argument('--tol', type=float, default=1e-5)
+    parser.add_argument('--mu', type=float, default=0.01)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--verbose', action='store_true', default=False)
     args = parser.parse_args()
-    main(args)
+
+    os.chdir('../data/datasets1')
+    for fname in os.listdir():
+        if '.mat' in fname:
+            args.ex = fname
+        print('File: {}'.format(args.ex))
+        for seed in range(5):
+            for eta in  [0.01, 0.1, 1]:
+                args.eta = eta
+                for gamma in [0.1, 0.5, 0.85, 1]:
+                    args.gamma = gamma
+                    for mu in [0.01, 0.1, 1]:
+                        st = time.time()
+                        args.seed = seed
+                        args.mu = mu
+                        res = qap_main(args)
+                        el = time.time() - st
+                        print(f'Seed: {seed:2d} | eta: {str(eta):4s} | gamma: {str(gamma):4s} | mu: {str(mu):4s} | res: {res:.2f} | time: {el:.2f}s')

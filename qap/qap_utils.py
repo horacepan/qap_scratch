@@ -50,3 +50,8 @@ def myQR(mat):
     if np.sum(rounded_r > 0) > 0:
         Q = Q * rounded_r
     return Q, R
+
+def isperm(X, tol=1e-8):
+    n = X.shape[0]  
+    ones = np.ones(n)
+    return np.allclose(X.dot(ones), 1) and np.allclose(X.T.dot(ones), 1) and np.all(X > -tol)
