@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from admm import make_vhat, make_gangster, make_L, make_y0, make_r0, lower_bound
 from snpy.utils import hook_length
 
-PREFIX = '../data/datasets1/'
+PREFIX = '../data/'
 
 def load_cg_transform(n, directory):
     fname = os.path.join(directory, f'c{n}.npy')

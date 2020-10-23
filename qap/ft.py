@@ -2,6 +2,7 @@ import time
 import pdb
 from snpy.sn_irrep import SnIrrep
 from snpy.perm import Perm, sn
+from snpy.utils import hook_length
 import scipy.io
 import numpy as np
 import math
@@ -37,8 +38,9 @@ def qap_ft(mat, _lambda):
     rho = SnIrrep(_lambda, fmt='dense')
     fhat = 0
     cos_reps = sn_minus2_coset(n)
-    sn_minus2_size = math.factorial(n) / len(cos_reps)
-    fmat = np.zeros(rho(Perm.eye(n)).shape)
+    sn_minus2_size = math.factorial(n-2)
+    hl = hook_length(_lambda)
+    fmat = np.zeros((hl, hl))
     fmat[-1, -1] = sn_minus2_size
 
     if _lambda == (n - 1, 1):
@@ -46,7 +48,7 @@ def qap_ft(mat, _lambda):
 
     for p in cos_reps:
         feval = mat[p(n) - 1, p(n-1) - 1]
-        fhat += feval * (rho(p) @ fmat)
+        fhat += rho(p) @ (feval * fmat)
 
     return fhat
 
@@ -66,19 +68,26 @@ def gen_qap_func(a, b):
     return f
 
 if __name__ == '__main__':
-    _lambda = (4, 2)
-    amat = np.random.randint(0, 10, size=(6, 6))
-    bmat = np.random.randint(0, 10, size=(6, 6))
+    n = 6
+    for _lambda in [(n-2, 1, 1), (n-2, 2), (n-1, 1)]:
+        amat = np.random.randint(0, 10, size=(n, n))
+        bmat = np.random.randint(0, 10, size=(n, n))
 
-    st = time.time()
-    ahat = qap_ft(amat, _lambda)
-    bhat = qap_ft(bmat, _lambda)
-    fhat = (1 / math.factorial(4)) * (ahat @ bhat.T)
-    print('Elapsed: {:.2f}s'.format(time.time() - st))
+        st = time.time()
+        ahat = qap_ft(amat, _lambda)
+        bhat = qap_ft(bmat, _lambda)
+        fhat = (1 / math.factorial(_lambda[0])) * (ahat @ bhat.T)
+        print('Elapsed: {:.2f}s'.format(time.time() - st))
 
-    st = time.time()
-    fab = gen_qap_func(amat, bmat)
-    fhat2 = raw_ft(fab, _lambda)
-    print(np.allclose(fhat2, fhat))
-    print('Elapsed: {:.2f}s'.format(time.time() - st))
-    pdb.set_trace()
+        st = time.time()
+        fab = gen_qap_func(amat, bmat)
+        fhat2 = raw_ft(fab, _lambda)
+        pdb.set_trace()
+        if not (np.allclose(fhat2, fhat)):
+            print(f'Not right for {_lambda}')
+            pdb.set_trace()
+        else:
+            print(fhat[-1, -1])
+
+        print('Elapsed: {:.2f}s'.format(time.time() - st))
+        print(f'Done with {_lambda}')

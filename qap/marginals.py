@@ -1,9 +1,11 @@
 import pdb
 import numpy as np
+import matplotlib.pyplot as plt
 
 from snpy.perm import Perm, sn
 from snpy.sn_irrep import SnIrrep
 from snpy.utils import hook_length
+from sylvester import rand_perm
 
 def coset_reps_2(n):
     reps = []
@@ -81,3 +83,25 @@ def c_lambda(_lambda):
         #pdb.set_trace()
         pass
     return mat
+
+def make_block_tensor(n, g):
+    irreps = [(n - 2, 1, 1), (n - 2, 2), (n - 1, 1), (n - 1, 1), (n - 1, 1), (n,), (n,)]
+    hls = [hook_length(ir) for ir in irreps]
+    tot = int(sum(hls))
+    mat = np.zeros((tot, tot))
+
+    idx = 0
+    for ir, d in zip(irreps, hls):
+        d = int(d)
+        rho = SnIrrep(ir)
+        mat[idx: idx+d, idx: idx+d] = rho(g)
+        idx += d
+
+    return mat
+
+if __name__ == '__main__':
+    n = 10
+    g = rand_perm(10)
+    mat = make_block_tensor(n, g)
+    plt.spy(np.round(mat, 4))
+    plt.show()

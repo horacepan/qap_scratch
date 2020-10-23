@@ -12,7 +12,7 @@ from mat_utils import v2k, k2v, random_perm
 from snpy.utils import hook_length
 # from fourier_admm import make_bdiag_mask
 
-PREFIX = '../data/datasets1/'
+PREFIX = '../data/'
 
 def fnorm(m):
     return np.linalg.norm(m, 'fro')
