@@ -1,10 +1,12 @@
 import time
 import os
 import pdb
+from copy import deepcopy
 import argparse
 import numpy as np
 import scipy.io
 from qap_utils import qap_func, myQR, qap_func_hadamard, qap_func_hadamard_lagrangian, isperm
+from multiprocessing import Pool
 
 def eig_prob(A):
     '''
@@ -163,20 +165,45 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', default=False)
     args = parser.parse_args()
 
-    os.chdir('../data/datasets1')
+    os.chdir('../data/')
+    all_args = []
     for fname in os.listdir():
         if '.mat' in fname:
             args.ex = fname
+        if 'nug12.mat' not in fname:
+            continue
         print('File: {}'.format(args.ex))
-        for seed in range(5):
-            for eta in  [0.01, 0.1, 1]:
+        opt_res = float('inf')
+        results = []
+
+        _st = time.time()
+        for seed in range(40):
+            #for eta in  [0.01, 0.1, 1]:
+            for eta in  [0.5]:
                 args.eta = eta
-                for gamma in [0.1, 0.5, 0.85, 1]:
+                #for gamma in [0.1, 0.5, 0.85, 1]:
+                for gamma in [0.8]:
                     args.gamma = gamma
-                    for mu in [0.01, 0.1, 1]:
+                    for mu in [5]:
                         st = time.time()
                         args.seed = seed
                         args.mu = mu
+                        args_copy = deepcopy(args)
+                        all_args.append(args_copy)
+                        '''
+                        all_args.append(args_copy)
                         res = qap_main(args)
                         el = time.time() - st
+                        opt_res = min(opt_res, res)
                         print(f'Seed: {seed:2d} | eta: {str(eta):4s} | gamma: {str(gamma):4s} | mu: {str(mu):4s} | res: {res:.2f} | time: {el:.2f}s')
+                        results.append(res)
+                        '''
+        #print(f'Opt res: {opt_res:.2f} | Median: {np.median(results)} | Mean: {np.mean(results):.2f} | Total time: {time.time() - _st:.2f}s')
+        print('Starting pool')
+        npool = 4
+        with Pool(npool) as p:
+            st = time.time()
+            results = p.map(qap_main, all_args, chunksize=len(all_args)//npool)
+            end = time.time()
+            print(np.min(results), np.median(results), np.mean(results))
+            print('Elapsed:', end - st)
