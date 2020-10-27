@@ -1,4 +1,26 @@
 import numpy as np
+from scipy.optimize import linear_sum_assignment
+
+def glb(A, B):
+    '''
+    A: n x n numpy matrix
+    B: n x n numpy matrix
+    Returns: the Gilmore Lawler lower bound
+    '''
+    n = A.shape[0]
+    C = np.kron(A, B)
+    l_mat = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            A_srt = np.delete(A[i, :], i, 0)
+            B_srt = np.delete(B[j, :], j, 0)
+            A_srt.sort()
+            B_srt.sort()
+            l_mat[i, j] = A[i, i] + B[j, j] + A_srt.dot(B_srt[::-1])
+
+    lrows, lcols = linear_sum_assignment(l_mat)
+    total = l_mat[lrows, lcols].sum()
+    return total
 
 def qap_func(A, B, C=None):
     if C is None:
