@@ -58,12 +58,14 @@ def qap_func_hadamard_lagrangian(A, B, C=None):
         mask = mu*X < _lambda
         penalty = ((-_lambda * X) + 0.5*mu*(X*X)) * mask
         penalty = penalty + ((-_lambda * _lambda) / (2 * mu)) * (1 - mask)
-        return qapf(X) + np.sum(penalty)
+        tot = qapf(X) + np.sum(penalty)
+        return tot
 
     def g(X, _lambda, mu):
         mask = mu*X < _lambda
         penalty = (-_lambda + (mu * X)) * mask
         return qapg(X) + penalty
+
     return f, g
 
 def myQR(mat):
@@ -71,9 +73,10 @@ def myQR(mat):
     rounded_r = np.sign(np.diag(R))
     if np.sum(rounded_r > 0) > 0:
         Q = Q * rounded_r
+
     return Q, R
 
 def isperm(X, tol=1e-8):
-    n = X.shape[0]  
+    n = X.shape[0]
     ones = np.ones(n)
     return np.allclose(X.dot(ones), 1) and np.allclose(X.T.dot(ones), 1) and np.all(X > -tol)
