@@ -158,6 +158,6 @@ function test_irrep_threaded()
     @time println("irrep2kron: ", isapprox(kp, irrep2kron_t(kron2irrep_t(kp, c, ci), c, ci)));
 end
 
-println("Running with: ", Threads.nthreads(), " threads.");
-test_vec_kron_threaded();
-test_irrep_threaded();
+# println("Running with: ", Threads.nthreads(), " threads.");
+# test_vec_kron_threaded();
+# test_irrep_threaded();
