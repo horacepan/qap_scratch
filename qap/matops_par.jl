@@ -3,41 +3,13 @@ using Statistics
 using Random
 using Printf
 using NPZ
+include("./matops.jl");
 
-function rand_perm(n)
-    perm = randperm(n);
-    mat = zeros(n, n);
-    for (i, j) in enumerate(perm)
-        mat[i, j] = 1;
-    end
-    return mat;
-end
-
-function _outer(A, B)
-    return reshape(A, :, 1) * reshape(B, :, 1)';
-end
-
-function operm(p)
-   return _outer(p, p);
-end
-
-function load_cmat(n)
-    prefix = "./../cmats/";
-    c2 = npzread(prefix * string(n-2) * "11.npy");
-    c1 = npzread(prefix * string(n-1) * "1.npy");
-    mat = zeros(n*n, n*n);
-
-    d, _ = size(c2);
-    mat[begin:d, begin:d] = c2;
-    mat[d+1:end, d+1:end] = c1;
-    return mat;
-end
-
-function vec2kron(vp)
+function vec2kron_t(vp)
     k, _ = size(vp);
     n = Int(sqrt(k));
     output = zeros(k, k);
-    for j in 1:n
+    Threads.@threads for j in 1:n
         for i in 1:n
             row_idx = i + (j-1)*n;
             row = vp[row_idx, :];
@@ -47,12 +19,12 @@ function vec2kron(vp)
     return output;
 end
 
-function kron2vec(kp)
+function kron2vec_t(kp)
     k, _ = size(kp);
     n = Int(sqrt(k));
     output = zeros(k, k);
 
-    for j in 1:n
+    Threads.@threads for j in 1:n
         for i in 1:n
             row_idx = i + (j-1)*n;
             _block = view(kp, (i-1)*n+1:i*n, (j-1)*n+1:j*n);
@@ -62,13 +34,13 @@ function kron2vec(kp)
     return output;
 end
 
-function kron2block(mat)
+function kron2block_t(mat)
     k, _ = size(mat);
     n = Int(sqrt(k));
     d = k - n;
     output = zeros(size(mat));
 
-    for j in 1:k
+    Threads.@threads for j in 1:k
         for i in 1:k
             # figure out the appropriate x,y,z,w indices
             x = div(i-1, n) + 1;
@@ -97,13 +69,13 @@ function kron2block(mat)
     return output;
 end
 
-function block2kron(mat)
+function block2kron_t(mat)
     k, _ = size(mat);
     n = Int(sqrt(k));
     d = k - n;
     output = zeros(k, k);
 
-    for t1 in 1:(k - n)
+    Threads.@threads for t1 in 1:(k - n)
         for t2 in 1:(k-n)
             x = div(t1-1, n-1) + 1;
             rem_x = t1 - (x-1)*(n-1);
@@ -140,48 +112,52 @@ function block2kron(mat)
     return output;
 end
 
-function vec2irrep(mat, cmat, cinv)
-    kron_mat = vec2kron(mat);
-    blocked = kron2block(kron_mat);
+function vec2irrep_t(mat, cmat, cinv)
+    kron_mat = vec2kron_t(mat);
+    blocked = kron2block_t(kron_mat);
     irr = cmat * blocked * cinv;
     return irr;
 end
 
-function kron2irrep(kron_mat, cmat, cinv)
-    blocked = kron2block(kron_mat);
+function kron2irrep_t(kron_mat, cmat, cinv)
+    blocked = kron2block_t(kron_mat);
     irr = cmat * blocked * cinv;
     return irr;
 end
 
-function irrep2kron(irr_mat, cmat, cinv)
+function irrep2kron_t(irr_mat, cmat, cinv)
     blocked = cinv * irr_mat * cmat;
-    kron_mat = block2kron(blocked);
+    kron_mat = block2kron_t(blocked);
     return kron_mat;
 end
 
-function irrep2vec(irr_mat, cmat, cinv)
+function irrep2vec_t(irr_mat, cmat, cinv)
     blocked = cinv * irr_mat * cmat;
-    kron_mat = block2kron(blocked);
-    vec = kron2vec(kron_mat);
+    kron_mat = block2kron_t(blocked);
+    vec = kron2vec_t(kron_mat);
     return vec;
 end
 
-function test_vec_kron()
-    n = 10;
+function test_vec_kron_threaded()
+    n = 30;
     mat = rand(n, n);
     v = reshape(mat, :, 1) * reshape(mat, :, 1)';
     k = kron(mat, mat);
-    println("kron2vec: ", isapprox(kron2vec(k), v));
-    println("vec2kron: ", isapprox(vec2kron(v), k));
+    @time println("kron2vec: ", isapprox(kron2vec_t(k), v));
+    @time println("vec2kron: ", isapprox(vec2kron_t(v), k));
 end
 
-function test_irrep()
-    n = 10;
+function test_irrep_threaded()
+    n = 60;
     c = load_cmat(n);
     ci = inv(c);
     p = rand_perm(n);
     vp = operm(p);
     kp = kron(p, p);
-    println("irrep2vec : ", isapprox(vp, irrep2vec(vec2irrep(vp, c, ci), c, ci)));
-    println("irrep2kron: ", isapprox(kp, irrep2kron(kron2irrep(kp, c, ci), c, ci)));
+    @time println("irrep2vec : ", isapprox(vp, irrep2vec_t(vec2irrep_t(vp, c, ci), c, ci)));
+    @time println("irrep2kron: ", isapprox(kp, irrep2kron_t(kron2irrep_t(kp, c, ci), c, ci)));
 end
+
+println("Running with: ", Threads.nthreads(), " threads.");
+test_vec_kron_threaded();
+test_irrep_threaded();
