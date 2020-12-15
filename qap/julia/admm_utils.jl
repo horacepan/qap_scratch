@@ -73,3 +73,23 @@ function make_that(n)
     That = [-ones(2*n, 1) krons];
     return That
 end
+
+function make_gangster(n)
+    En::Array{Int64, 2} = ones(n, n);
+    upper_ones::Array{Int64, 2} = triu(En, 1);
+    In::Array{Int64, 2} = I(n)
+    J::Array{Int64, 2} = zeros(1+n*n, 1+n*n);
+    J[2:end, 2:end] = kron(In, upper_ones) +  kron(upper_ones, In);
+    J = (J + J');
+    J[1, 1] = 1;
+    return J.>0;
+end
+
+function make_gangster_noc(n)
+    En::Array{Int64, 2} = ones(n, n);
+    upper_ones::Array{Int64, 2} = triu(En, 1);
+    In::Array{Int64, 2} = I(n)
+    J = kron(In, upper_ones) +  kron(upper_ones, In);
+    J = (J + J');
+    return J.>0;
+end
