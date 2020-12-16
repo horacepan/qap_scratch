@@ -10,7 +10,7 @@ function psd_project(mat)
     pos_idx = eigs.values .> 0;
     vals = eigs.values[pos_idx];
     vecs = eig.vectors[:, pos_idx];
-    return vecs * diagm(vals) * vecs';
+    return vecs * Diagonal(vals) * vecs';
 end
 
 function make_L(A, B, C=nothing)
@@ -59,8 +59,7 @@ function make_vhat(n)
     vxv = kron(V, V);
     r1 = zeros(1, n1*n1+1);
     r1[1, 1] = sqrt(0.5);
-    r2 = [ones(n*n, 1) * sqrt(0.5)/n vxv];
-    println(size(r1), size(r2));
+    r2 = [ones(n*n, 1)*sqrt(0.5)/n vxv];
     Vhat = [r1; r2];
 end
 
@@ -71,7 +70,7 @@ function make_that(n)
     kron_eri = kron(en', In);
     krons = [kron_ier; kron_eri];
     That = [-ones(2*n, 1) krons];
-    return That
+    return That;
 end
 
 function make_gangster(n)
