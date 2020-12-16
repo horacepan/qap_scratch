@@ -1,6 +1,7 @@
 using LinearAlgebra
 using MAT
 using Printf
+include("./admm_utils.jl")
 
 function lower_bound(
         L::Array{Float64, 2},
@@ -18,8 +19,8 @@ function lower_bound(
 
     W11 = Zloc[1:(n-1)*(n-1)+1, 1:(n-1)*(n-1)+1];
     W11 = (W11 + W11') / 2.;
-    W12 = Zloc[1:(n-1)*(n-1)+1, (n-1)*(n-1)+2:end];  #W12 = Zloc[:(n-1)*(n-1)+1, (n-1)*(n-1)+1:] 
-    W22 = Zloc[(n-1)*(n-1)+2:end, (n-1)*(n-1)+2:end];  #W22 = Zloc[(n-1)*(n-1)+1:, (n-1)*(n-1)+1:]  
+    W12 = Zloc[1:(n-1)*(n-1)+1, (n-1)*(n-1)+2:end];
+    W22 = Zloc[(n-1)*(n-1)+2:end, (n-1)*(n-1)+2:end];
 
     Dw, Uw = eigen(W11); # Dw = vals, Uw = eigvecs
     neg_idx = Dw .< 0;
@@ -36,10 +37,10 @@ function lower_bound(
 end
 
 function admm_qap(A, B, C=nothing, args=nothing)
-    maxit = args.maxit;
-    tol = args.tol;
-    gamma = args.gamma;
-    lowrank = args.lowrank;
+    maxit = args["maxit"];
+    tol = args["tol"];
+    gamma = args["gamma"];
+    lowrank = args["lowrank"];
 
     n, _ = size(A);
     L = make_L(A, B, C);
@@ -49,7 +50,8 @@ function admm_qap(A, B, C=nothing, args=nothing)
 
     normL = norm(L);
     Vhat_nrows, _ = size(Vhat);
-    L = L * (n*n / normL); # rescaled for numerical stability
+    scale = normL / (n*n)
+    L = L / scale; # rescaled for numerical stability
     beta = n / 3.;
     lbd = -Inf;
     ubd = Inf;
@@ -97,8 +99,7 @@ function admm_qap(A, B, C=nothing, args=nothing)
         Z[abs.(Z) .< tol] .= 0;
 
         # pretty print progress
-        if mod(i, 100) == 0 && args.verbose
-            scale = normL / (n*n);
+        if mod(i, 100) == 0 && args["verbose"]
             lbd = max(lbd, lower_bound(L, J, Vhat, That, Z, n, scale));
             ly = sum(L .* Y) * scale;
             # ubd = min(ubd, upper_bound(Y, A, B));
