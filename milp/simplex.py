@@ -182,7 +182,7 @@ class Simplex:
         print("==============================")
 
 if __name__ == '__main__':
-    if sys.argv[1] == "max":
+    if sys.argv[1] == "test1":
         A = np.array([
             [1, 0, 0],
             [2, 1, 1],
@@ -192,7 +192,7 @@ if __name__ == '__main__':
         c = np.array([20, 16, 12])
         const = 10
         mode = "maximize"
-    else:
+    elif sys.argv[1] == "test2"
         A = np.array([
             [ 1,  0, 0],
             [ 0,  1, 0],
@@ -203,6 +203,16 @@ if __name__ == '__main__':
         c = np.array([-1, 2, -1])
         const = 0
         mode = "minimize"
+    else:
+        A = np.array([
+            [2, 1, 1],
+            [4, 2, 3],
+            [2, 5, 5],
+        ])
+        b = np.array([14, 28, 30])
+        c = np.array([1, 2, -1])
+        const = 0
+        mode = "maximize"
 
     simplex = Simplex(A, b, c, const, mode)
     simplex.solve()
