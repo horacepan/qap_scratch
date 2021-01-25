@@ -109,7 +109,7 @@ class Simplex:
         return (self._sol[:len(self.c)] * self.c).sum() + self.const
 
     def sol(self):
-        return self._sol
+        return self._sol[:len(self.c)]
 
     def sol2(self):
         sol = np.zeros(len(self.c))
@@ -132,26 +132,24 @@ class Simplex:
     def objective(self):
         return self.c
 
-    def bfs(self):
-        pass
-
-    def solve(self):
+    def solve(self, verbose=False):
         sol = 0
         iters = 0
-        self.ppt()
+        if verbose:
+            self.ppt()
 
         if self.mode == "maximize":
             while not np.all(self.c_tableau <= 0):
                 self.pivot()
-                self.ppt()
+                if verbose:
+                    self.ppt()
                 iters += 1
-            #print(f"Solved after {iters} iters")
         elif self.mode == "minimize":
             while not np.all(self.c_tableau >= 0):
                 self.pivot()
-                self.ppt()
+                if verbose:
+                    self.ppt()
                 iters += 1
-            #print(f"Solved after {iters} iters | basic vars:", self.basic_vars)
         return self.tableau_const
 
     def add_constraint(self, ai, bi):
@@ -180,40 +178,3 @@ class Simplex:
         print("Solution vec:", self._sol)
         print("Objective: ", self.obj_val())
         print("==============================")
-
-if __name__ == '__main__':
-    if sys.argv[1] == "test1":
-        A = np.array([
-            [1, 0, 0],
-            [2, 1, 1],
-            [2, 2, 1],
-        ])
-        b = np.array([4, 10, 16])
-        c = np.array([20, 16, 12])
-        const = 10
-        mode = "maximize"
-    elif sys.argv[1] == "test2"
-        A = np.array([
-            [ 1,  0, 0],
-            [ 0,  1, 0],
-            [ 1,  1, 0],
-            [-1,  0, 2],
-        ])
-        b = np.array([4, 4, 6, 4])
-        c = np.array([-1, 2, -1])
-        const = 0
-        mode = "minimize"
-    else:
-        A = np.array([
-            [2, 1, 1],
-            [4, 2, 3],
-            [2, 5, 5],
-        ])
-        b = np.array([14, 28, 30])
-        c = np.array([1, 2, -1])
-        const = 0
-        mode = "maximize"
-
-    simplex = Simplex(A, b, c, const, mode)
-    simplex.solve()
-    print("Opt val: {}".format(simplex.obj_val()))
