@@ -3,17 +3,17 @@ import pdb
 import numpy as np
 
 class Simplex:
-    def __init__(self, A, b, c, const=0, mode="maximize"):
-        A_s, c_s = self._add_slack_vars(A, c)
+    def __init__(self, A, b, c, const=0, mode="max"):
         self.A = A
         self.b = b
         self.c = c
         self.const = const
         self.mode = mode
 
+        A_s, c_s = self._add_slack_vars(A, c)
         self.A_tableau = A_s
         self.c_tableau = c_s
-        self.b_tableau = b
+        self.b_tableau = b.copy()
         self.tableau_const = const
         self.basic_vars = list(range(A.shape[1], self.A_tableau.shape[1]))
         self._sol = np.zeros(len(c_s))
@@ -26,20 +26,18 @@ class Simplex:
         return A_new, c_new
 
     def pivot(self):
-        if self.mode == "maximize":
+        if self.mode == "max":
             i, j = self.find_pivot_max()
-        elif self.mode == "minimize":
+        elif self.mode == "min":
             i, j = self.find_pivot_min()
         else:
             raise Exception(f"{self.mode} is not a valid mode for simplex")
 
-        #print(f"{self.basic_vars[i]+1} is leaving, {j+1} is entering")
+        if i is None:
+            return "error"
 
         constraint = i
-        try:
-            leaving_var = self.basic_vars[i]
-        except:
-            pdb.set_trace()
+        leaving_var = self.basic_vars[i]
         entering_var = j
 
         self.basic_vars[i] = j
@@ -48,6 +46,7 @@ class Simplex:
         row_i_normed = row_i / a_ij
         b_i_normed = self.b_tableau[i] / a_ij
 
+        #b_new = np.linalg.inv(self.A_tableau[:, self.basic_vars]) @ self.b_tableau
         for k in range(self.A_tableau.shape[0]):
             if k == i:
                 self.A_tableau[i] = row_i_normed
@@ -57,6 +56,7 @@ class Simplex:
                 a_kj = self.A_tableau[k, j]
                 self.A_tableau[k] -= a_kj*row_i_normed
                 self.b_tableau[k] -= a_kj*b_i_normed
+        #print("b tableau after", self.b_tableau, b_new, "is same: ", np.allclose(self.b_tableau, b_new))
 
         # do the same for the cost vector
         c_j = self.c_tableau[j]
@@ -73,6 +73,9 @@ class Simplex:
             if _c > 0:
                 idx = i
                 break
+
+        if idx is None:
+            return None, None
 
         # find the row i such that b_i / a_ij is minimal
         eps = float("inf")
@@ -92,6 +95,8 @@ class Simplex:
             if _c < 0:
                 idx = i
                 break
+        if idx is None:
+            return None, None
 
         # find the row i such that b_i / a_ij is minimal
         eps = float("inf")
@@ -138,26 +143,49 @@ class Simplex:
         if verbose:
             self.ppt()
 
-        if self.mode == "maximize":
+        if self.mode == "max":
             while not np.all(self.c_tableau <= 0):
-                self.pivot()
+                res = self.pivot()
+                if res is "error":
+                    break
+
                 if verbose:
                     self.ppt()
                 iters += 1
-        elif self.mode == "minimize":
+        elif self.mode == "min":
             while not np.all(self.c_tableau >= 0):
-                self.pivot()
+                res = self.pivot()
+                if res is "error":
+                    break
+
                 if verbose:
                     self.ppt()
                 iters += 1
-        return self.tableau_const
+
+        if res is "error" and self.mode == "max":
+            return float('inf')
+        elif res is "error" and self.mode == "min":
+            return -float('inf')
+        return self.obj_val()
 
     def add_constraint(self, ai, bi):
         '''
         Add new constraint to the problem
         '''
-        A_new = np.append(self.A, a_i.reshape(1, -1))
+        A_new = np.vstack([self.A, ai.reshape(1, -1)])
         b_new = np.append(self.b, bi)
+        self.A = A_new
+        self.b = b_new
+
+    def reset(self):
+        A_s, c_s = self._add_slack_vars(self.A, self.c)
+        self.A_tableau = A_s
+        self.c_tableau = c_s
+        self.b_tableau = self.b.copy()
+        self.tableau_const = self.const
+        self.basic_vars = list(range(self.A.shape[1], self.A_tableau.shape[1]))
+        self._sol = np.zeros(len(c_s))
+        self._sol[self.A.shape[1]:] = self.b_tableau
 
     def ppt(self):
         print('const:', self.tableau_const)
