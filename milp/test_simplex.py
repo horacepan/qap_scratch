@@ -1,5 +1,7 @@
+import pdb
 import unittest
 import numpy as np
+from scipy.optimize import linprog
 from simplex import Simplex
 
 class TestSimplex(unittest.TestCase):
@@ -88,6 +90,33 @@ class TestSimplex(unittest.TestCase):
         self.assertTrue(np.allclose(s1.c, s2.c))
         self.assertTrue(np.allclose(s1.sol(), s2.sol()))
         self.assertTrue(np.allclose(s1.obj_val(), s2.obj_val()))
+
+    def test3(self):
+        '''
+        minimise
+            4a + 5b + 6c
+        subject to
+            a + b >= 11
+            a - b <= 5
+            c - a - b >= 0
+            c - a - b <= 0
+            7a >= 35 - 12b
+            a >= 0 b >= 0 c >= 0
+        '''
+        A = np.array([
+            [-1,  -1,  0],
+            [ 1,  -1,  0],
+            [-1,  -1,  1],
+            [ 1,   1, -1],
+            [-7, -12,  0],
+        ])
+        b = np.array([-11, 5, 0, 0, -35])
+        c = np.array([4, 5, 6])
+        s = Simplex(A, b, c, 0, "min")
+        s.solve()
+        pdb.set_trace()
+        self.assertEqual(s.obj_val(), 113)
+        self.assertTrue(np.allclose(s.sol(), np.array([8, 3, 11])))
 
 if __name__ == '__main__':
     unittest.main()

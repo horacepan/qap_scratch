@@ -1,6 +1,7 @@
 import sys
 import pdb
 import numpy as np
+from scipy.optimize import linprog
 
 class Simplex:
     def __init__(self, A, b, c, const=0, mode="max"):
@@ -15,9 +16,15 @@ class Simplex:
         self.c_tableau = c_s
         self.b_tableau = b.copy()
         self.tableau_const = const
-        self.basic_vars = list(range(A.shape[1], self.A_tableau.shape[1]))
+
+        # randomly init a feasible basis + solution
+        self.basis = list(range(A.shape[1], self.A_tableau.shape[1]))
         self._sol = np.zeros(len(c_s))
         self._sol[A.shape[1]:] = self.b_tableau
+
+    def is_feasible(self, basis):
+        Ab = self.A_tableau[:, basis]
+        Ab_inv = np.linalg.inv(Ab)
 
     def _add_slack_vars(self, A, c):
         nslack = A.shape[0]
@@ -36,17 +43,18 @@ class Simplex:
         if i is None:
             return "error"
 
+        print("swapping {} for {}".format(self.basis[i], j))
         constraint = i
-        leaving_var = self.basic_vars[i]
+        leaving_var = self.basis[i]
         entering_var = j
 
-        self.basic_vars[i] = j
+        self.basis[i] = j
         a_ij = self.A_tableau[i, j]
         row_i = self.A_tableau[i, :]
         row_i_normed = row_i / a_ij
         b_i_normed = self.b_tableau[i] / a_ij
 
-        #b_new = np.linalg.inv(self.A_tableau[:, self.basic_vars]) @ self.b_tableau
+        #b_new = np.linalg.inv(self.A_tableau[:, self.basis]) @ self.b_tableau
         for k in range(self.A_tableau.shape[0]):
             if k == i:
                 self.A_tableau[i] = row_i_normed
@@ -64,7 +72,7 @@ class Simplex:
         self.tableau_const -= c_j*b_i_normed
 
         self._sol[:] = 0
-        for idx, v in enumerate(self.basic_vars):
+        for idx, v in enumerate(self.basis):
             self._sol[v] = self.b_tableau[idx]
 
     def find_pivot_max(self, rule='lex'):
@@ -101,6 +109,7 @@ class Simplex:
         # find the row i such that b_i / a_ij is minimal
         eps = float("inf")
         min_row = None
+        print("x: ", self.b_tableau, "col:", self.A_tableau[:, idx])
         for row_idx in range(self.A_tableau.shape[0]):
             if self.A_tableau[row_idx, idx] > 0:
                 val = self.b_tableau[row_idx] / self.A_tableau[row_idx, idx]
@@ -114,12 +123,16 @@ class Simplex:
         return (self._sol[:len(self.c)] * self.c).sum() + self.const
 
     def sol(self):
-        return self._sol[:len(self.c)]
+        Ab = self.A_tableau[:, self.basis]
+        Ab_inv = np.linalg.inv(Ab)
+        xb = Ab_inv @ self.b
+        return xb
+        #return self._sol[:len(self.c)]
 
     def sol2(self):
         sol = np.zeros(len(self.c))
 
-        for idx, i in enumerate(self.basic_vars):
+        for idx, i in enumerate(self.basis):
             if i < len(sol):
                 sol[i] = self.b_tableau[idx]
         return sol
@@ -144,7 +157,7 @@ class Simplex:
             self.ppt()
 
         if self.mode == "max":
-            while not np.all(self.c_tableau <= 0):
+            while not np.all(self.c_tableau < 0):
                 res = self.pivot()
                 if res is "error":
                     break
@@ -153,7 +166,7 @@ class Simplex:
                     self.ppt()
                 iters += 1
         elif self.mode == "min":
-            while not np.all(self.c_tableau >= 0):
+            while not np.all(self.c_tableau > 0):
                 res = self.pivot()
                 if res is "error":
                     break
@@ -183,22 +196,23 @@ class Simplex:
         self.c_tableau = c_s
         self.b_tableau = self.b.copy()
         self.tableau_const = self.const
-        self.basic_vars = list(range(self.A.shape[1], self.A_tableau.shape[1]))
+        self.basis = list(range(self.A.shape[1], self.A_tableau.shape[1]))
         self._sol = np.zeros(len(c_s))
         self._sol[self.A.shape[1]:] = self.b_tableau
 
     def ppt(self):
-        print('const:', self.tableau_const)
+        print("basis", self.basis)
         print('c:')
         print(self.c_tableau)
-        print('A:')
+        #print('A:')
         for row in self.A_tableau:
-            print(row)
+            #print(row)
+            pass
         print('b:')
         print(self.b_tableau)
 
         sol_vec = np.zeros(self.A_tableau.shape[1])
-        for idx, i in enumerate(self.basic_vars):
+        for idx, i in enumerate(self.basis):
             try:
                 sol_vec[i] = self.b_tableau[idx]
             except:
@@ -206,3 +220,58 @@ class Simplex:
         print("Solution vec:", self._sol)
         print("Objective: ", self.obj_val())
         print("==============================")
+
+if __name__ == '__main__':
+    A = np.array([
+            [1, 0, 0],
+            [2, 1, 1],
+            [2, 2, 1],
+        ])
+    b = np.array([4, 10, 16])
+    c = np.array([-20, -16, -12])
+
+    s = Simplex(A, b, c, 0, "min")
+    s.solve()
+
+    #A = np.array([
+    #        [-1,  -1,  0],
+    #        [ 1,  -1,  0],
+    #        [-1,  -1,  1],
+    #        [ 1,   1, -1],
+    #        [-7, -12,  0],
+    #])
+    #b = np.array([-11, 5, 0, 0, -35])
+    #c = np.array([4, 5, 6])
+    #s = Simplex(A, b, c, 0, "min")
+    #s.solve(True)
+    #print(s.obj_val())
+
+    A = np.array([
+            [ 1,  0, 0],
+            [ 0,  1, 0],
+            [ 1,  1, 0],
+            [-1,  0, 2],
+    ])
+    b = np.array([4, 4, 6, 4])
+    c = np.array([-1, 2, -1])
+
+    A = np.array([
+        [-1,  -1,  0],
+        [ 1,  -1,  0],
+        [-1,  -1,  1],
+        [ 1,   1, -1],
+        [-7, -12,  0],
+    ])
+    b = np.array([-11, 5, 0, 0, -35]) # original
+    c = np.array([4, 5, 6])
+
+    const = 0
+    mode = "min"
+    simplex = Simplex(A, b, c, const, mode)
+    simplex.solve()
+    print('sol', simplex.sol())
+    print('obj', simplex.obj_val())
+    print('=========')
+    res = linprog(c, A, b)
+    print(res)
+    pdb.set_trace()
