@@ -1,6 +1,27 @@
+import time
+from cvxopt import solvers
 import numpy as np
 from collections import deque
 from scipy.optimize import linprog
+from gurobipy import Model, GRB, quicksum
+
+def guro_opt(A, b, c, minimize=True):
+    m = Model()
+    m.setParam('OutputFlag', 0)
+    mode = GRB.MINIMIZE if minize else GRB.MAXIMIZE
+    _vars = [m.addVar(lb=0, vtype="C") for i in range(A.shape[1])]
+    m.setObjective(quicksum(_vars[i]*c[i] for i in range(c)), mode)
+
+    for idx in range(A.shape[0]):
+        row = A[idx]
+        m.addConstr(quicksum(row[i]*_vars[i] for i in range(A.shape[1])) <= b[idx])
+
+    m.optimize()
+    results = {
+        "status": m.status,
+        "obj": m.objVal,
+        "sol": np.array([v.X for v in _vars])
+    }
 
 def gen_simple_cuts(x, excluded_indices=None):
     if excluded_indices is None:
@@ -21,6 +42,9 @@ def gen_simple_cuts(x, excluded_indices=None):
         cuts.append((-ai, bi_ceil, xids))
 
     return cuts
+
+def gen_gomory_cuts(A, b):
+
 
 def add_cut(A, b, ai, bi):
     A_new = np.vstack([A, ai])
@@ -58,7 +82,7 @@ def bc(A, b, c):
             for a_cut, b_cut, xids in cuts:
                 A_new, b_new = add_cut(curr_A, curr_b, a_cut, b_cut)
                 q.append((A_new, b_new, xids))
-
+    print("Nodes explored: {}".format(nnodes))
     return opt_sol, opt_obj
 
 if __name__ == '__main__':
@@ -72,6 +96,72 @@ if __name__ == '__main__':
     c = np.array([
         -1, -1
     ])
+
+    #A = np.array([
+    #        [-5, 4],
+    #        [6, 2]
+    #    ])
+    #b = np.array([0, 17])
+    #c = -np.array([1, 1])
+
+    #sol, obj = bc(A, b, c)
+    #print('sol:', sol)
+    #print('obj:', obj)
+    print('====================')
+    m = Model()
+    m.setParam('OutputFlag', 0)
+    x = m.addVar(lb=0, vtype='I')
+    y = m.addVar(lb=0, vtype='I')
+    #m.addConstr(-5*x + 4*y <= 0)
+    #m.addConstr(6*x + 2*y <= 17)
+    m.addConstr(-5*x + 4*y <= 0)
+    m.addConstr( 5*x + 2*y <= 15)
+    m.setObjective(-x - y, GRB.MINIMIZE)
+    m.optimize()
+    print("sol: [{}, {}]".format(x.X, y.X))
+    print("obj:", m.objVal)
+
+    '''
+    15x1+ 12x2+ 4x3+ 2x4
+    s.t.8x1+ 5x2+ 3x3+ 2x4≤10
+    xi∈{0,1}
+    '''
+    st = time.time()
+    A = np.array([
+        [8, 5, 3, 2],
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+    ])
+    b = np.array([
+        10,
+        1,
+        1,
+        1,
+        1
+    ])
+    c = -np.array([15, 12, 4, 2])
     sol, obj = bc(A, b, c)
     print('sol:', sol)
     print('obj:', obj)
+    print('====================')
+
+    print("Elapsed: {:.2f}s".format(time.time() -st))
+    print('===============')
+    st = time.time()
+    m = Model()
+    m.setParam("OutputFlag", 0)
+    _vars = []
+    for _ in range(A.shape[1]):
+        _vars.append(m.addVar(lb=0, ub=1, vtype='I'))
+    for idx in range(A.shape[1]):
+        row = A[idx]
+        m.addConstr(quicksum(row[i] * _vars[i] for i in range(A.shape[1])) <= b[idx])
+    m.setObjective(quicksum(_vars[i] * c[i] for i in range(A.shape[1])), GRB.MINIMIZE)
+    print("setup  elapsed:", time.time() - st)
+    m.optimize()
+    sol = [v.X for v in _vars]
+    print(m.objVal)
+    print("gurobi sol:", sol)
+    print("gurobi elapsed:", time.time() - st)
