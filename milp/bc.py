@@ -66,6 +66,21 @@ def gen_gomory_cuts(tableau, A_orig, b_orig):
         pdb.set_trace()
     return [(lhs[i], rhs[i], None) for i in range(lhs.shape[0])]
 
+def gen_all_gomory_cuts(tableau, A_orig, b_orig):
+    ncols = A.shape[1]
+    A_t = tableau[:-1, :-1]
+    b_t = tableau[:-1, -1]
+
+    idxs = ~np.equal(np.mod(b_t, 1), 0)
+    At =     -A_t[idxs] + np.floor(A_t[idxs])
+    d = bt = -b_t[idxs] + np.floor(b_t[idxs])
+
+    e = At[:, :ncols] # k x n
+    r = At[:, ncols:] # k x n
+    lhs = e - r@A_orig  # (k x n) - (k x m) x (m x n) = k x n
+    rhs = d - r@b_orig # k - (k x m) x m x 1
+    return lhs, rhs
+
 def add_cut(A, b, ai, bi):
     ai = np.round(ai, 8)
     bi = np.round(bi, 8)
@@ -109,6 +124,11 @@ def bc(A, b, c, cut_method="simple"):
                 cuts = gen_simple_cuts(lp_sol.x, xids)
             elif cut_method == "gomory":
                 cuts = gen_gomory_cuts(tableau[0], curr_A, curr_b)
+            elif cut_method == "all_gomory":
+                A_cut, b_cut = gen_all_gomory_cuts(tableau[0], curr_A, curr_b)
+                A_new, b_new = add_cut(curr_A, curr_b, A_cut, b_cut)
+                q.append((A_new, b_new, xids))
+                continue
             for a_cut, b_cut, xids in cuts:
                 A_new, b_new = add_cut(curr_A, curr_b, a_cut, b_cut)
                 q.append((A_new, b_new, xids))
@@ -154,7 +174,7 @@ if __name__ == '__main__':
     #b = np.array([0, 15])
     #c = np.array([-1, -1])
 
-    sol, obj = bc(A, b, c, "simple")
+    sol, obj = bc(A, b, c, "all_gomory")
     print('sol:', sol)
     print('obj:', obj)
     print('====================')
