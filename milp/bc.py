@@ -1,16 +1,18 @@
 import time
 from cvxopt import solvers
 import numpy as np
-from collections import deque
+from collections import deque, namedtuple
 from scipy.optimize import linprog
 from gurobipy import Model, GRB, quicksum
 
-def guro_opt(A, b, c, minimize=True):
+Result = namedtuple("Result", ("x", "fun", "success"))
+
+def guro_opt(c, A, b, minimize=True):
     m = Model()
     m.setParam('OutputFlag', 0)
-    mode = GRB.MINIMIZE if minize else GRB.MAXIMIZE
+    mode = GRB.MINIMIZE if minimize else GRB.MAXIMIZE
     _vars = [m.addVar(lb=0, vtype="C") for i in range(A.shape[1])]
-    m.setObjective(quicksum(_vars[i]*c[i] for i in range(c)), mode)
+    m.setObjective(quicksum(_vars[i]*c[i] for i in range(len(c))), mode)
 
     for idx in range(A.shape[0]):
         row = A[idx]
@@ -22,6 +24,8 @@ def guro_opt(A, b, c, minimize=True):
         "obj": m.objVal,
         "sol": np.array([v.X for v in _vars])
     }
+    res_tup = Result(results['sol'], m.objVal, m.status == GRB.OPTIMAL)
+    return res_tup
 
 def gen_simple_cuts(x, excluded_indices=None):
     if excluded_indices is None:
@@ -44,7 +48,7 @@ def gen_simple_cuts(x, excluded_indices=None):
     return cuts
 
 def gen_gomory_cuts(A, b):
-
+    pass
 
 def add_cut(A, b, ai, bi):
     A_new = np.vstack([A, ai])
@@ -52,7 +56,7 @@ def add_cut(A, b, ai, bi):
     return A_new, b_new
 
 def get_next_node(q):
-    return q.pop()
+    return q.popleft()
 
 def is_int(x):
     return np.all(np.equal(np.mod(x, 1), 0))
@@ -68,7 +72,7 @@ def bc(A, b, c):
 
     while len(q) > 0:
         curr_A, curr_b, xids = get_next_node(q)
-        lp_sol = linprog(c, curr_A, curr_b)
+        lp_sol = guro_opt(c, curr_A, curr_b)
         nnodes += 1
 
         if not lp_sol.success:
@@ -146,9 +150,9 @@ if __name__ == '__main__':
     print('sol:', sol)
     print('obj:', obj)
     print('====================')
-
     print("Elapsed: {:.2f}s".format(time.time() -st))
     print('===============')
+    exit()
     st = time.time()
     m = Model()
     m.setParam("OutputFlag", 0)
