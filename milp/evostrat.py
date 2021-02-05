@@ -62,7 +62,7 @@ class EvoStrat:
                 r = self.get_reward(w)
                 rewards.append(r)
 
-        rewards = np.array(rewards).astype(np.float32)
+        rewards = np.array(rewards, dtype=np.float32)
         return rewards
 
     def update_weights(self, rewards, pop_weights):
@@ -120,12 +120,16 @@ class EvoStrat:
                     i, np.mean(avg_rewards[-100:]), self.get_reward(self.get_weights())
                 ))
 
+        if pool is not None:
+            pool.close()
+            pool.join()
+
 if __name__ == '__main__':
     in_dim = 4
     hid_dim = 32
     out_dim = 2
 
-    pop_size = 4
+    pop_size = 20
     mu = 0
     sigma = 0.1
     learning_rate = 0.01
@@ -142,5 +146,5 @@ if __name__ == '__main__':
 
     weights = [p.data for p in model.parameters()]
     reward_func = partial(get_reward_cp, env, model)
-    evo = EvoStrat(weights, reward_func, pop_size, mu, sigma, learning_rate, ncpu=1, normalize_rewards=False)
+    evo = EvoStrat(weights, reward_func, pop_size, mu, sigma, learning_rate, ncpu=-1, normalize_rewards=False)
     evo.run(1000)
