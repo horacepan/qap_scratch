@@ -1,4 +1,5 @@
 import pdb
+import time
 from functools import partial
 import multiprocessing as mp
 import numpy as np
@@ -107,6 +108,7 @@ class EvoStrat:
         niters: int, number of gradient steps to take
         log_iters: int, number of iterations between printing progress
         '''
+        st = time.time()
         avg_rewards = []
         pool = mp.Pool(self.ncpu) if self.ncpu > 1 else None
         for i in range(niters):
@@ -116,8 +118,8 @@ class EvoStrat:
             avg_rewards.append(np.mean(rewards))
 
             if i % log_iters == 0:
-                print("Iter: {:3d} | Last 100 avg reward: {:.2f} | Rollout: {:.2f}".format(
-                    i, np.mean(avg_rewards[-100:]), self.get_reward(self.get_weights())
+                print("Iter: {:3d} | Last 100 avg reward: {:.2f} | Rollout: {:.2f} | Elapsed: {:.2f}min".format(
+                    i, np.mean(avg_rewards[-100:]), self.get_reward(self.get_weights()), (time.time() - st) / 60.
                 ))
 
         if pool is not None:
@@ -146,5 +148,5 @@ if __name__ == '__main__':
 
     weights = [p.data for p in model.parameters()]
     reward_func = partial(get_reward_cp, env, model)
-    evo = EvoStrat(weights, reward_func, pop_size, mu, sigma, learning_rate, ncpu=-1, normalize_rewards=False)
+    evo = EvoStrat(weights, reward_func, pop_size, mu, sigma, learning_rate, ncpu=ncpu, normalize_rewards=False)
     evo.run(1000)
