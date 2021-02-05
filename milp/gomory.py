@@ -4,7 +4,7 @@ from scipy.optimize import linprog
 
 from simplex import Simplex
 
-def gomory_cuts(tableau, A_orig, b_orig, ncols):
+def gomory_cuts(tableau, A_orig, b_orig):
     '''
     tableau: A,b stack c, const
              A = m x n
@@ -14,6 +14,7 @@ def gomory_cuts(tableau, A_orig, b_orig, ncols):
              r = m (number of slacks)
              ncols = num vars
     '''
+    ncols = A_orig.shape[1]
     A_t = tableau[:-1, :-1]
     b_t = tableau[:-1, -1]
 
@@ -70,7 +71,7 @@ class Gomory:
                 break
             else:
                 tab = tableau[-1]
-                A_cuts, b_cuts = gomory_cuts(tab, self.A, self.b, ncols=self.ncols)
+                A_cuts, b_cuts = gomory_cuts(tab, self.A, self.b)
                 Ai, bi = pick_gomory_cut(A_cuts, b_cuts)
                 Ai = np.round(Ai, 10)
                 bi = np.round(bi, 10)
