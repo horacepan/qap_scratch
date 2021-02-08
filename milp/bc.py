@@ -59,11 +59,8 @@ def gen_gomory_cuts(tableau, A_orig, b_orig):
 
     e = At[:, :ncols] # k x n
     r = At[:, ncols:] # k x n
-    try:
-        lhs = e - r@A_orig  # (k x n) - (k x m) x (m x n) = k x n
-        rhs = d - r@b_orig # k - (k x m) x m x 1
-    except:
-        pdb.set_trace()
+    lhs = e - r@A_orig  # (k x n) - (k x m) x (m x n) = k x n
+    rhs = d - r@b_orig # k - (k x m) x m x 1
     return [(lhs[i], rhs[i], None) for i in range(lhs.shape[0])]
 
 def gen_all_gomory_cuts(tableau, A_orig, b_orig):
@@ -79,7 +76,10 @@ def gen_all_gomory_cuts(tableau, A_orig, b_orig):
     r = At[:, ncols:] # k x n
     lhs = e - r@A_orig  # (k x n) - (k x m) x (m x n) = k x n
     rhs = d - r@b_orig # k - (k x m) x m x 1
-    return lhs, rhs
+
+    unique_lhs, unique_idx = np.unique(lhs, return_index=True, axis=0)
+    unique_rhs = rhs[unique_idx]
+    return unique_lhs, unique_rhs
 
 def add_cut(A, b, ai, bi):
     ai = np.round(ai, 8)
@@ -92,9 +92,10 @@ def get_next_node(q):
     return q.popleft()
 
 def is_int(x):
-    return np.all(np.equal(np.mod(x, 1), 0))
+    rounded_x = np.round(x, 8)
+    return np.all(np.equal(np.mod(rounded_x, 1), 0))
 
-def bc(c, A, b, cut_method="simple"):
+def bc(c, A, b, cut_method="simple", debug_true_sol=None):
     node = (A, b, set())
     q = deque()
     q.append(node)
@@ -110,7 +111,6 @@ def bc(c, A, b, cut_method="simple"):
     while len(q) > 0:
         curr_A, curr_b, xids = get_next_node(q)
         lp_sol = linprog(c, curr_A, curr_b, callback=log_tableau)
-        #lp_sol = guro_opt(c, curr_A, curr_b)
         nnodes += 1
 
         if not lp_sol.success:
@@ -128,6 +128,10 @@ def bc(c, A, b, cut_method="simple"):
                 A_cut, b_cut = gen_all_gomory_cuts(tableau[0], curr_A, curr_b)
                 A_new, b_new = add_cut(curr_A, curr_b, A_cut, b_cut)
                 q.append((A_new, b_new, xids))
+                #if debug_true_sol is not None:
+                #    valid = A_new @ debug_true_sol <= b_new
+                #    if not np.all(valid):
+                #        raise Exception("Gomory cuts invalid | Numerical error?")
                 continue
 
             for a_cut, b_cut, xids in cuts:

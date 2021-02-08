@@ -3,7 +3,7 @@ import numpy as np
 from gurobipy import GRB
 from bc import guro_opt, bc
 
-CUT_METHODS = ["simple"]
+CUT_METHODS = ["simple", "all_gomory"]
 class TestBC(unittest.TestCase):
     def test1(self):
         A = np.array([
