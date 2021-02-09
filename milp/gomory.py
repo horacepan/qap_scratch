@@ -2,8 +2,6 @@ import pdb
 import numpy as np
 from scipy.optimize import linprog
 
-from simplex import Simplex
-
 def gomory_cuts(tableau, A_orig, b_orig):
     '''
     tableau: A,b stack c, const
@@ -24,11 +22,8 @@ def gomory_cuts(tableau, A_orig, b_orig):
 
     e = At[:, :ncols] # k x n
     r = At[:, ncols:] # k x n
-    try:
-        lhs = e - r@A_orig  # (k x n) - (k x m) x (m x n) = k x n
-        rhs = d - r@b_orig # k - (k x m) x m x 1
-    except:
-        pdb.set_trace()
+    lhs = e - r@A_orig  # (k x n) - (k x m) x (m x n) = k x n
+    rhs = d - r@b_orig # k - (k x m) x m x 1
     return lhs, rhs
 
 def pick_gomory_cut(At, bx):

@@ -3,7 +3,7 @@ import numpy as np
 from collections import namedtuple
 from scipy.optimize import linprog
 from gomory import gomory_cuts
-from bc import gen_simple_cuts, guro_opt, bc
+from bc import gen_simple_cuts, guro_opt, bc, gen_all_gomory_cuts
 from gen_data import generate_max_cut
 
 class EnvMILP:
@@ -58,7 +58,7 @@ class MaxCutMILP:
         self.A = A
         self.b = b
         self.c = c
-        self.curr_cuts = gomory_cuts(self._tableau[0], A, b)
+        self.curr_cuts = gen_all_gomory_cuts(self._tableau[0], A, b)
 
         return MaxCutState(self.A, self.b, self.c, self.curr_sol, self.curr_cuts)
 
